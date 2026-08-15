@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クラシカルワーカー 2026</title>
+<title>Classical Worker Lab/title>
 <style>
   :root{
     --bg:#121218;
@@ -628,8 +628,8 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">Classical worker SEASON 2026</div>
-    <h1>クラシカルワーカー 2026</h1>
-    <div class="sub">強すぎず　弱すぎず　慎重に　躊躇せず</div>
+    <h1>Classical Worker's Lab</h1>
+    <div class="sub">クラシカルワーカー　メンバーサイト</div>
   </header>
 
   <div class="tabs">
@@ -1903,7 +1903,7 @@ function renderMyPageWithPlayer(){
     <div class="card">
       <h2><span class="tag">STEP 4</span>今シーズンの目標</h2>
       <label>目標(このシーズンで一番達成したいこと)</label>
-      <input type="text" id="main-goal-input" value="${escapeHtml(p.mainGoal||'')}" placeholder="例:昇格リーグでC1に上がる">
+      <input type="text" id="main-goal-input" value="${escapeHtml(p.mainGoal||'')}" placeholder="例:Act毎3000試合こなす">
       <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer">
         <input type="checkbox" ${p.mainGoalDone?'checked':''} ${p.mainGoal?'':'disabled'} onchange="toggleMainGoalDone(this.checked)">
         <span style="color:var(--text)">目標を達成した</span>
@@ -1914,7 +1914,7 @@ function renderMyPageWithPlayer(){
       <label>よくある課題から選ぶ</label>
       <div class="choice-group" style="flex-wrap:wrap">${renderGoalChips(p)}</div>
       <label>新しいミッションを追加(自由入力)</label>
-      <input type="text" id="goal-input" placeholder="例:シャミセンに勝ち越す">
+      <input type="text" id="goal-input" placeholder="例:毎日リプレイを視聴する">
       <button class="primary" onclick="addGoal()">追加</button>
       <div style="margin-top:16px">
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);letter-spacing:.03em;margin-bottom:6px">ミッション達成率</div>
