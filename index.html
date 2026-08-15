@@ -1,0 +1,2523 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classical Worker Lab</title>
+<style>
+  :root{
+    --bg:#121218;
+    --panel:#1b1b25;
+    --panel-border:#2b2b3a;
+    --text:#ece9e2;
+    --text-dim:#8b899a;
+    --gold:#e8b23d;
+    --win:#49c9a6;
+    --loss:#d1495b;
+    --goal:#8a7fe0;
+    --font-display:"Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+    --font-body:"Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI", sans-serif;
+    --font-mono:"SF Mono", "Roboto Mono", "Consolas", monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(232,178,61,0.08), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(138,127,224,0.08), transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:720px;margin:0 auto;}
+  header{
+    text-align:center;
+    margin-bottom:22px;
+    padding-bottom:18px;
+    border-bottom:2px solid var(--panel-border);
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:.25em;
+    color:var(--gold);
+    text-transform:uppercase;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-weight:800;
+    font-size:26px;
+    letter-spacing:.04em;
+    margin:6px 0 4px;
+  }
+  .sub{color:var(--text-dim);font-size:13px;}
+
+  .tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .tab{
+    flex:1;
+    padding:12px;
+    text-align:center;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    font-weight:700;
+    letter-spacing:.03em;
+    cursor:pointer;
+    color:var(--text-dim);
+    transition:.15s, transform .08s ease;
+    font-family:var(--font-display);
+    min-width:60px;
+  }
+  .tab.active{color:var(--bg);background:var(--gold);border-color:var(--gold);}
+  .tab:active{transform:scale(0.96);}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:16px;
+  }
+  .card h2{
+    font-family:var(--font-display);
+    font-size:15px;
+    margin:0 0 12px;
+    letter-spacing:.03em;
+    display:flex;align-items:center;gap:8px;
+  }
+  .card h2 .tag{
+    font-family:var(--font-mono);
+    font-size:10px;
+    color:var(--bg);
+    background:var(--gold);
+    padding:2px 6px;
+    border-radius:4px;
+    letter-spacing:.1em;
+  }
+
+  label{display:block;font-size:12px;color:var(--text-dim);margin:12px 0 6px;}
+  select,input[type=number],input[type=text],input[type=date]{
+    width:100%;
+    padding:10px;
+    border-radius:8px;
+    border:1px solid var(--panel-border);
+    background:#0f0f16;
+    color:var(--text);
+    font-size:14px;
+    font-family:var(--font-body);
+    color-scheme:dark;
+  }
+  input[type=date]::-webkit-calendar-picker-indicator{
+    filter:invert(0.75) brightness(1.6);
+    cursor:pointer;
+    border-radius:4px;
+  }
+  input[type=date]:focus,select:focus,input[type=number]:focus,input[type=text]:focus{
+    outline:none;border-color:var(--gold);
+  }
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+
+  .choice-group{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;}
+  .choice{
+    flex:1;padding:10px;text-align:center;border-radius:8px;
+    border:1px solid var(--panel-border);background:#0f0f16;cursor:pointer;
+    font-weight:700;font-size:13px;color:var(--text-dim);
+    transition:transform .08s ease;
+  }
+  .choice.win.selected{background:var(--win);border-color:var(--win);color:#08201a;}
+  .choice.loss.selected{background:var(--loss);border-color:var(--loss);color:#2a0a0d;}
+  .choice:active{transform:scale(0.94);}
+
+  .checkbox-choice{
+    flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;
+    border-radius:8px;border:1px solid var(--panel-border);background:#0f0f16;cursor:pointer;
+    font-weight:700;font-size:13px;color:var(--text-dim);transition:transform .08s ease,border-color .15s,color .15s;
+  }
+  .checkbox-choice:has(input:checked){border-color:var(--gold);color:var(--gold);}
+  .checkbox-choice.checked-cb{border-color:var(--gold);color:var(--gold);}
+  .checkbox-choice input{width:16px;height:16px;accent-color:var(--gold);cursor:pointer;}
+  .checkbox-choice:active{transform:scale(0.96);}
+
+  button.primary{
+    margin-top:14px;width:100%;padding:12px;border:none;border-radius:9px;
+    background:var(--gold);color:#20160a;font-weight:800;font-size:14px;
+    letter-spacing:.03em;cursor:pointer;font-family:var(--font-display);
+    transition:transform .08s ease,box-shadow .08s ease,opacity .15s;
+  }
+  button.primary:disabled{opacity:.4;cursor:not-allowed;}
+  button.primary:active:not(:disabled){transform:scale(0.96);box-shadow:inset 0 2px 8px rgba(0,0,0,.35);}
+  button.ghost{
+    background:none;border:1px solid var(--panel-border);color:var(--text-dim);
+    padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;
+    transition:transform .08s ease;
+  }
+  button.ghost:active{transform:scale(0.92);}
+  button.edit-btn{
+    background:none;border:1px solid var(--gold);color:var(--gold);
+    padding:4px 10px;border-radius:6px;font-size:10px;cursor:pointer;
+    transition:transform .08s ease;
+  }
+  button.edit-btn:active{transform:scale(0.92);}
+
+  .edit-actions{display:flex;gap:8px;margin-top:10px;}
+  .edit-actions .primary{flex:1;margin:0;padding:8px 12px;font-size:12px;}
+  .edit-actions .ghost{flex:1;margin:0;padding:8px 12px;font-size:12px;text-align:center;}
+
+  .history-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--panel-border);
+    gap:8px;
+  }
+  .history-item:last-child{border-bottom:none;}
+  .history-main{display:flex;flex-direction:column;flex:1;min-width:0;}
+  .history-main .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .history-main .top .names{font-weight:600;font-size:14px;}
+  .history-main .top .event-badge{
+    font-size:10px;background:rgba(232,178,61,0.15);color:var(--gold);
+    padding:2px 8px;border-radius:12px;border:1px solid rgba(232,178,61,0.25);
+    cursor:pointer;
+  }
+  .history-main .top .event-badge:hover{background:rgba(232,178,61,0.25);}
+  .history-main .score-display{
+    font-family:var(--font-mono);
+    font-size:13px;
+    font-weight:700;
+    color:var(--text-dim);
+    margin-top:2px;
+  }
+  .history-main .score-display .score-me{color:var(--text);}
+  .history-main .score-display .score-opp{color:var(--text);}
+  .history-main .score-display .vs{color:var(--text-dim);margin:0 4px;}
+  .pill{
+    font-family:var(--font-mono);font-size:11px;padding:2px 10px;border-radius:20px;font-weight:700;
+    flex-shrink:0;
+  }
+  .pill.win{background:rgba(73,201,166,.2);color:var(--win);}
+  .pill.loss{background:rgba(209,73,91,.2);color:var(--loss);}
+
+  /* ranking */
+  .rank-card{
+    display:flex;align-items:center;gap:14px;
+    background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:12px;padding:14px 16px;margin-bottom:10px;
+    position:relative;overflow:hidden;
+  }
+  .rank-card.r1{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+  .rank-num{
+    font-family:var(--font-mono);font-weight:800;font-size:20px;color:var(--text-dim);
+    width:34px;text-align:center;flex-shrink:0;
+  }
+  .rank-card.r1 .rank-num{color:var(--gold);}
+  .rank-body{flex:1;min-width:0;}
+  .rank-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .rank-name{font-weight:800;font-size:15px;}
+  .rank-meta{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);}
+  .gauge-row{display:flex;align-items:center;gap:8px;margin-top:5px;}
+  .gauge-label{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);width:38px;flex-shrink:0;}
+  .gauge{
+    flex:1;height:9px;background:#0f0f16;border-radius:2px;overflow:hidden;
+    clip-path:polygon(0 0,100% 0,97% 100%,0 100%);
+  }
+  .gauge-fill{height:100%;border-radius:2px;transition:width .4s;}
+  .gauge-fill.winrate{background:linear-gradient(90deg,var(--win),#7fe0c9);}
+  .gauge-fill.goal{background:linear-gradient(90deg,var(--goal),#b3a9f5);}
+  .gauge-fill.mr{background:var(--win);}
+  .gauge-val{font-family:var(--font-mono);font-size:10px;width:34px;text-align:right;flex-shrink:0;}
+
+  .empty{
+    text-align:center;color:var(--text-dim);font-size:13px;padding:30px 10px;
+  }
+  .goal-card{
+    background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:12px;padding:16px;margin-bottom:12px;
+  }
+  .goal-card-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .goal-card-name{font-weight:800;font-size:15px;}
+  .goal-card-chars{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);}
+  .main-goal{
+    font-family:var(--font-display);font-weight:800;font-size:15px;
+    color:var(--gold);margin:6px 0 10px;line-height:1.4;
+  }
+  .main-goal.empty-goal{
+    font-family:var(--font-body);font-weight:400;font-size:13px;color:var(--text-dim);font-style:normal;
+  }
+  .mission-rate-block{margin-top:10px;}
+  .mission-rate-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:var(--font-mono);font-size:11px;color:var(--text-dim);
+    letter-spacing:.03em;margin-bottom:6px;
+  }
+  .mission-rate-value{color:var(--goal);font-weight:700;}
+  .subgoal-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .subgoal-chip{
+    font-size:11px;padding:4px 9px;border-radius:20px;
+    background:#0f0f16;border:1px solid var(--panel-border);color:var(--text-dim);
+  }
+  .subgoal-chip.done{background:rgba(73,201,166,.15);border-color:var(--win);color:var(--win);text-decoration:line-through;}
+
+  .achievement-banner{
+    background:linear-gradient(135deg, rgba(232,178,61,.28), rgba(232,178,61,.04));
+    border:2px solid var(--gold);
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:18px;
+    box-shadow:0 0 28px rgba(232,178,61,.25);
+  }
+  .achievement-item{
+    background:rgba(0,0,0,.25);border-radius:9px;padding:14px 16px;margin-bottom:8px;
+    text-align:center;
+  }
+  .achievement-item:last-child{margin-bottom:0;}
+  .achievement-name{font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--gold);letter-spacing:.02em;}
+  .achievement-goal{font-size:12px;color:var(--text-dim);margin-top:6px;}
+
+  .notice-section-title{
+    font-family:var(--font-display);font-weight:800;font-size:14px;
+    letter-spacing:.03em;margin:22px 0 10px;color:var(--text-dim);
+    display:flex;align-items:center;gap:6px;
+  }
+  .notice-section-title:first-child{margin-top:0;}
+
+  .whoami{
+    display:flex;align-items:center;gap:10px;margin-bottom:16px;
+    background:var(--panel);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;
+  }
+  .whoami label{margin:0;flex-shrink:0;}
+  .whoami select{margin:0;}
+
+  .event-card{
+    background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:12px;padding:14px 16px;margin-bottom:10px;
+    transition:border-color .2s;
+  }
+  .event-card.editing{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+  .event-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .event-date-badge{
+    font-family:var(--font-mono);background:#0f0f16;border:1px solid var(--panel-border);
+    border-radius:8px;padding:6px 10px;text-align:center;flex-shrink:0;min-width:56px;
+  }
+  .event-date-badge .d{font-size:18px;font-weight:800;color:var(--gold);line-height:1;}
+  .event-date-badge .m{font-size:10px;color:var(--text-dim);}
+  .event-title{font-weight:800;font-size:14px;}
+  .event-desc{font-size:12px;color:var(--text-dim);margin-top:4px;white-space:pre-wrap;}
+  .attend-buttons{display:flex;gap:6px;margin-top:12px;}
+  .attend-btn{
+    flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:700;
+    border:1px solid var(--panel-border);background:#0f0f16;color:var(--text-dim);cursor:pointer;
+    transition:transform .08s ease;
+  }
+  .attend-btn.yes.selected{background:var(--win);border-color:var(--win);color:#08201a;}
+  .attend-btn.no.selected{background:var(--loss);border-color:var(--loss);color:#2a0a0d;}
+  .attend-btn.maybe.selected{background:var(--gold);border-color:var(--gold);color:#20160a;}
+  .attend-btn:active{transform:scale(0.94);}
+
+  .attend-breakdown{margin-top:8px;display:flex;flex-direction:column;gap:5px;}
+  .attend-breakdown-row{display:flex;gap:8px;align-items:flex-start;}
+  .attend-breakdown-label{
+    font-family:var(--font-mono);font-size:10px;color:var(--text-dim);
+    width:32px;flex-shrink:0;padding-top:3px;
+  }
+  .attend-breakdown-names{flex:1;display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
+  .name-chip{
+    font-size:11px;padding:3px 9px;border-radius:20px;
+    background:#0f0f16;border:1px solid var(--panel-border);color:var(--text-dim);
+  }
+  .name-chip.yes{border-color:var(--win);color:var(--win);}
+  .name-chip.maybe{border-color:var(--gold);color:var(--gold);}
+  .name-chip.no{border-color:var(--loss);color:var(--loss);}
+  .attend-breakdown-empty{font-size:11px;color:var(--text-dim);}
+
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .cal-nav-label{font-family:var(--font-display);font-weight:800;font-size:16px;letter-spacing:.03em;}
+  .cal-nav-btn{
+    background:var(--panel);border:1px solid var(--panel-border);color:var(--text);
+    width:34px;height:34px;border-radius:8px;font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    transition:transform .08s ease;
+  }
+  .cal-nav-btn:active{background:var(--gold);color:var(--bg);border-color:var(--gold);transform:scale(0.92);}
+  .cal-grid{
+    display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px;
+  }
+  .cal-weekday{
+    text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text-dim);
+    padding-bottom:6px;letter-spacing:.05em;
+  }
+  .cal-weekday.sun{color:var(--loss);}
+  .cal-weekday.sat{color:var(--goal);}
+  .cal-cell{
+    min-height:60px;background:#0f0f16;border:1px solid var(--panel-border);border-radius:8px;
+    padding:5px 4px;display:flex;flex-direction:column;gap:2px;overflow:hidden;
+  }
+  .cal-cell.empty{background:none;border:none;}
+  .cal-cell.today{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+  .cal-cell.has-event{border-color:rgba(232,178,61,.45);background:rgba(232,178,61,.06);}
+  .cal-daynum{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);}
+  .cal-cell.today .cal-daynum{color:var(--gold);font-weight:800;}
+  .cal-cell.sun-col .cal-daynum{color:var(--loss);}
+  .cal-cell.sat-col .cal-daynum{color:var(--goal);}
+  .cal-event-label{
+    font-size:9px;background:rgba(232,178,61,.2);color:var(--gold);border-radius:3px;
+    padding:1.5px 4px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;font-weight:700;
+  }
+  .cal-event-more{font-family:var(--font-mono);font-size:9px;color:var(--text-dim);}
+  .cal-legend{
+    display:flex;align-items:center;gap:6px;margin-bottom:14px;
+    font-family:var(--font-mono);font-size:10px;color:var(--text-dim);
+  }
+  .cal-legend .swatch{width:10px;height:10px;border-radius:3px;background:rgba(232,178,61,.35);border:1px solid var(--gold);}
+
+  .tournament-card{
+    background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;
+    padding:14px 16px;margin-bottom:10px;
+  }
+  .tournament-title{font-weight:800;font-size:14px;}
+  .tournament-date{font-family:var(--font-mono);font-size:11px;color:var(--gold);margin-top:2px;}
+  .tournament-desc{font-size:12px;color:var(--text-dim);margin-top:6px;}
+  .tournament-result{
+    margin-top:8px;background:rgba(232,178,61,.1);border-left:3px solid var(--gold);
+    padding:6px 10px;font-size:12px;
+  }
+  .footer-note{
+    text-align:center;font-size:11px;color:var(--text-dim);margin-top:24px;
+  }
+  .footer-note button{
+    background:none;border:none;color:var(--text-dim);text-decoration:underline;
+    font-size:11px;cursor:pointer;padding:0;
+  }
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--panel);border:1px solid var(--panel-border);
+    padding:10px 18px;border-radius:8px;font-size:12px;color:var(--text);
+    opacity:0;pointer-events:none;transition:opacity .25s;z-index:50;
+  }
+  .toast.show{opacity:1;}
+
+  .add-open-btn{
+    margin-top:4px;width:100%;padding:14px;border:1px dashed var(--panel-border);border-radius:12px;
+    background:none;color:var(--text-dim);font-weight:700;font-size:13px;cursor:pointer;
+    font-family:var(--font-display);letter-spacing:.03em;transition:transform .08s ease;
+  }
+  .add-open-btn:active{border-color:var(--gold);color:var(--gold);transform:scale(0.98);}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(6,6,10,.72);
+    display:flex;align-items:flex-end;justify-content:center;
+    z-index:200;padding:0;
+  }
+  .modal-box{
+    background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:16px 16px 0 0;padding:18px 18px 22px;
+    width:100%;max-width:520px;max-height:90vh;overflow-y:auto;
+    box-shadow:0 -10px 40px rgba(0,0,0,.5);
+  }
+  @media (min-width:560px){
+    .modal-overlay{align-items:center;padding:16px;}
+    .modal-box{border-radius:16px;}
+  }
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .modal-head h2{font-family:var(--font-display);font-size:16px;margin:0;letter-spacing:.03em;}
+  .modal-close{
+    background:none;border:1px solid var(--panel-border);color:var(--text-dim);
+    width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;flex-shrink:0;
+    transition:transform .08s ease;
+  }
+  .modal-close:active{transform:scale(0.9);}
+  textarea{
+    width:100%;min-height:96px;padding:10px;border-radius:8px;border:1px solid var(--panel-border);
+    background:#0f0f16;color:var(--text);font-size:14px;font-family:var(--font-body);resize:vertical;
+  }
+  textarea:focus{outline:none;border-color:var(--gold);}
+
+  .attend-toggle-hint{font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.5;}
+
+  .date-mode-row{display:flex;gap:8px;align-items:flex-end;margin-top:8px;}
+  .date-mode-row .row{flex:1;margin:0;}
+  .date-mode-row button{flex-shrink:0;}
+  .btn-small{
+    padding:10px 12px;border-radius:8px;border:1px solid var(--panel-border);
+    background:#0f0f16;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;
+    transition:transform .08s ease;
+  }
+  .btn-small:active{border-color:var(--gold);color:var(--gold);transform:scale(0.94);}
+
+  .picker-cal{margin-top:12px;}
+  .picker-cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .picker-cal-label{font-family:var(--font-display);font-weight:800;font-size:13px;}
+  .picker-cal-btn{
+    background:#0f0f16;border:1px solid var(--panel-border);color:var(--text);
+    width:26px;height:26px;border-radius:6px;font-size:12px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:transform .08s ease;
+  }
+  .picker-cal-btn:active{transform:scale(0.9);}
+  .picker-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .picker-weekday{text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--text-dim);padding-bottom:4px;}
+  .picker-cell{
+    aspect-ratio:1;min-height:30px;display:flex;align-items:center;justify-content:center;
+    border-radius:6px;font-size:11px;font-family:var(--font-mono);cursor:pointer;
+    background:#0f0f16;border:1px solid var(--panel-border);color:var(--text);
+    transition:transform .08s ease;
+  }
+  .picker-cell:active{transform:scale(0.88);}
+  .picker-cell.empty{background:none;border:none;cursor:default;}
+  .picker-cell.selected{background:var(--gold);border-color:var(--gold);color:#20160a;font-weight:800;}
+  .picker-cell.today:not(.selected){border-color:var(--gold);color:var(--gold);}
+  .picker-selected-summary{
+    margin-top:10px;font-size:12px;color:var(--text-dim);
+    display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  }
+  .picker-clear{
+    background:none;border:none;color:var(--loss);text-decoration:underline;font-size:11px;cursor:pointer;padding:0;
+  }
+
+  .req-mark{color:var(--loss);margin-left:3px;font-weight:800;}
+  input.input-error{border-color:var(--loss)!important;box-shadow:0 0 0 1px var(--loss);}
+  .date-section{border-radius:10px;transition:box-shadow .15s;}
+  .date-section.input-error{box-shadow:0 0 0 1px var(--loss);border-radius:10px;padding:10px;margin:0 -10px;}
+  @keyframes shakeX{
+    10%,90%{transform:translateX(-1px);}
+    20%,80%{transform:translateX(2px);}
+    30%,50%,70%{transform:translateX(-4px);}
+    40%,60%{transform:translateX(4px);}
+  }
+  .shake{animation:shakeX .35s;}
+
+  .loading-overlay{
+    position:fixed;inset:0;background:rgba(6,6,10,.5);
+    display:flex;align-items:center;justify-content:center;
+    z-index:400;opacity:0;pointer-events:none;transition:opacity .15s;
+  }
+  .loading-overlay.show{opacity:1;pointer-events:auto;}
+  .loading-box{
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:14px;padding:20px 26px;box-shadow:0 10px 30px rgba(0,0,0,.4);
+  }
+  .spinner{
+    width:26px;height:26px;border-radius:50%;
+    border:3px solid var(--panel-border);border-top-color:var(--gold);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-label{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);letter-spacing:.05em;}
+
+  .sub-tabs{display:flex;gap:6px;margin-bottom:14px;}
+  .sub-tab{
+    flex:1;padding:8px;text-align:center;border-radius:8px;
+    border:1px solid var(--panel-border);background:#0f0f16;cursor:pointer;
+    font-size:12px;font-weight:700;color:var(--text-dim);transition:.15s;
+    font-family:var(--font-display);
+  }
+  .sub-tab.active{color:var(--bg);background:var(--gold);border-color:var(--gold);}
+  .sub-tab:active{transform:scale(0.94);}
+
+  .mr-legend{
+    display:flex;align-items:center;gap:12px;
+    background:#0f0f16;border:1px solid var(--panel-border);
+    border-radius:8px;padding:8px 12px;margin-bottom:14px;
+    font-family:var(--font-mono);font-size:10px;color:var(--text-dim);
+    flex-wrap:wrap;justify-content:center;
+  }
+  .mr-legend .gradient-bar{
+    flex:1;min-width:120px;height:12px;border-radius:4px;
+    background:linear-gradient(90deg, #1a4fc1, #4a8ff7, #a8d4ff, #ffffff, #ffd4a8, #ff8a4a, #e03030);
+  }
+  .mr-legend .label{font-size:9px;white-space:nowrap;}
+  .mr-legend .label.mid{color:var(--gold);font-weight:700;}
+
+  .match-event-select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--panel-border);background:#0f0f16;color:var(--text);font-size:14px;font-family:var(--font-body);}
+  .match-event-select:focus{outline:none;border-color:var(--gold);}
+
+  .score-buttons{
+    display:grid;
+    grid-template-columns:repeat(11,1fr);
+    gap:4px;
+    margin-top:6px;
+  }
+  .score-btn{
+    padding:6px 0;
+    border-radius:4px;
+    border:1px solid var(--panel-border);
+    background:#0f0f16;
+    color:var(--text-dim);
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    transition:all .1s;
+    text-align:center;
+    font-family:var(--font-mono);
+  }
+  .score-btn:hover{border-color:var(--text-dim);}
+  .score-btn.active{background:var(--gold);border-color:var(--gold);color:#20160a;}
+  .score-btn:active{transform:scale(0.9);}
+  .score-vs{text-align:center;font-size:13px;color:var(--text-dim);font-weight:700;padding:4px 0;}
+
+  .event-actions{display:flex;gap:6px;flex-shrink:0;}
+  .event-actions button{font-size:10px;padding:4px 8px;}
+
+  .edit-fields{display:flex;flex-direction:column;gap:8px;}
+  .edit-fields .edit-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .edit-fields .edit-row > *{flex:1;min-width:120px;}
+  .edit-fields label{font-size:11px;margin:0 0 4px;}
+  .edit-fields input,.edit-fields select,.edit-fields textarea{padding:8px;font-size:13px;}
+  .edit-fields textarea{min-height:50px;}
+  /* 大会名バッジのデザイン強化 */
+  .tournament-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:rgba(232,178,61,0.12);
+    border:1px solid rgba(232,178,61,0.3);
+    border-radius:16px;
+    padding:2px 10px 2px 8px;
+    font-size:11px;
+    color:var(--gold);
+    font-weight:600;
+    letter-spacing:0.3px;
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .tournament-badge:hover{background:rgba(232,178,61,0.22);}
+  .tournament-badge::before{
+    content:"🏆";
+    font-size:12px;
+  }
+  .tournament-badge.manual-badge{
+    background:rgba(139,137,154,0.14);
+    border-color:rgba(139,137,154,0.32);
+    color:var(--text-dim);
+    cursor:default;
+  }
+  .tournament-badge.manual-badge:hover{background:rgba(139,137,154,0.14);}
+  .tournament-badge.manual-badge::before{content:"📝";}
+  .history-match-event{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:rgba(138,127,224,0.1);
+    border:1px solid rgba(138,127,224,0.2);
+    border-radius:12px;
+    padding:0 8px;
+    font-size:10px;
+    color:var(--goal);
+    font-weight:500;
+  }
+  .history-match-event::before{
+    content:"⚔️";
+    font-size:10px;
+  }
+  /* お知らせのあなたは：が変更できない問題修正 */
+  .whoami select{pointer-events:auto; opacity:1;}
+  /* 編集ボタンとキャンセルボタン同じサイズ */
+  .edit-actions .primary,
+  .edit-actions .ghost{
+    flex:1;
+    margin:0;
+    padding:10px 12px;
+    font-size:12px;
+    text-align:center;
+    justify-content:center;
+    display:flex;
+    align-items:center;
+    border-radius:8px;
+  }
+  .edit-actions .primary{
+    background:var(--gold);
+    color:#20160a;
+    border:none;
+    font-weight:800;
+  }
+  .edit-actions .ghost{
+    background:none;
+    border:1px solid var(--panel-border);
+    color:var(--text-dim);
+    font-weight:600;
+  }
+
+  /* マイページ編集用 */
+  .match-edit-row{
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:#0f0f16; padding:8px; border-radius:8px; margin-bottom:6px;
+  }
+  .match-edit-row input, .match-edit-row select{ flex:1; min-width:80px; padding:6px; font-size:12px; background:#121218; border:1px solid var(--panel-border); border-radius:6px; color:var(--text); }
+  .match-edit-row .score-edit{ display:flex; align-items:center; gap:4px; }
+  .match-edit-row .score-edit input{ width:50px; text-align:center; }
+  .match-edit-row .score-edit span{ color:var(--text-dim); font-weight:700; }
+  .match-edit-row .pill{ font-size:10px; padding:1px 8px; }
+  .match-edit-row button{ font-size:11px; padding:4px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Classical worker SEASON 2026</div>
+    <h1>Classical Worker's Lab</h1>
+    <div class="sub">クラシカルワーカー　メンバーサイト</div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-notice" onclick="switchTab('notice')">📢 お知らせ</div>
+    <div class="tab" id="tab-goals" onclick="switchTab('goals')">🎯 目標</div>
+    <div class="tab" id="tab-ranking" onclick="switchTab('ranking')">🏆 ランキング</div>
+    <div class="tab" id="tab-members" onclick="switchTab('members')">👥 メンバー</div>
+    <div class="tab" id="tab-mypage" onclick="switchTab('mypage')">✏️ マイページ</div>
+  </div>
+
+  <div id="view-notice"></div>
+  <div id="view-goals" style="display:none"></div>
+  <div id="view-ranking" style="display:none"></div>
+  <div id="view-members" style="display:none"></div>
+  <div id="view-mypage" style="display:none"></div>
+
+  <div class="footer-note"><br>
+  <button onclick="resetAll()">全データをリセット</button></div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div class="loading-label">保存中...</div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'classical_worker_2026_data';
+const SEED_PLAYERS = ["にゃんたかたー","プライドチキン","キタロー","ウーロン茶","れんたん","うーろん","ちゃぶ台","シャミセン","なかじま","ゆび","kaz_bwc","こなつ","エインセル河本","せば","しみちん","けんじろう","SAJ","AKAZUKIN","田井中 良樹","こうへー","でみ。","甘えっさん","ラスペーシア","Anne","ののの","shinsei","ココノツ","KFC-11","かーず","横須賀ふたば","サクリ"];
+
+let data = null;
+let currentPlayer = null;
+let pendingResult = null;
+let opponentName = '';
+let rankingSubTab = 'winrate';
+let editingEventId = null;
+
+// スコアと大会名保持用
+let savedScoreMe = 0;
+let savedScoreOpp = 0;
+let selectedEventId = ''; 
+let newEventNameInput = '';
+
+// 編集中の対戦履歴インデックス (マイページ)
+let editingMatchIndex = null;
+
+const MAX_GOALS = 25;
+const MIN_GOALS_HINT = 5;
+const GENERIC_GOALS = [
+  {label:"通常投げを1試合で〇回通す", needsCount:true, build:n=>`通常投げを1試合で${n}回通す`},
+  {label:"1試合のうちのコンボミスを〇回以内", needsCount:true, build:n=>`1試合のうちのコンボミスを${n}回以内`},
+  {label:"有利Fを取った後、〇つ以上の択を仕掛ける", needsCount:true, build:n=>`有利Fを取った後、${n}つ以上の択を仕掛ける`},
+  {label:"差し返しを1試合中、〇回成功させる", needsCount:true, build:n=>`差し返しを1試合中、${n}回成功させる`},
+  {label:"逆択をかける", needsCount:false, build:()=>`逆択をかける`},
+  {label:"投げとシミーで相手のガードを崩す", needsCount:false, build:()=>`投げとシミーで相手のガードを崩す`},
+  {label:"インパクトを返す", needsCount:false, build:()=>`インパクトを返す`},
+  {label:"中段を立つ", needsCount:false, build:()=>`中段を立つ`},
+  {label:"バーンアウトしない", needsCount:false, build:()=>`バーンアウトしない`}
+];
+let presetExpanded = {};
+let selectedMember = null;
+const _today = new Date();
+let calendarYear = _today.getFullYear();
+let calendarMonth = _today.getMonth();
+
+// 各タブの状態
+let tabStates = {
+  notice: { currentPlayer: null },
+  members: { selectedMember: null },
+  ranking: { subTab: 'winrate' },
+  mypage: { currentPlayer: null }
+};
+
+function defaultData(){
+  const players = {};
+  SEED_PLAYERS.forEach(n => players[n] = {matches:[], goals:[], controlTypes:[], maxMR:'', mainGoal:'', mainGoalDone:false, mainGoalAchievedAt:null});
+  return {players, events:[], tournaments:[]};
+}
+
+async function loadData(){
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      data = JSON.parse(stored);
+      if (!data.events) data.events = [];
+      if (!data.tournaments) data.tournaments = [];
+      Object.values(data.players).forEach(p => {
+        if (!p.controlTypes) p.controlTypes = [];
+        if (p.mainGoalAchievedAt === undefined) p.mainGoalAchievedAt = null;
+        if (p.matches === undefined) p.matches = [];
+        if (p.goals === undefined) p.goals = [];
+        p.matches.forEach(m => {
+          if (m.eventId === undefined) m.eventId = null;
+          if (m.eventType === undefined) m.eventType = null;
+        });
+        delete p.mainChar;
+        delete p.subChar;
+      });
+      data.events.forEach(ev => {
+        if (!ev.dates) ev.dates = [];
+        if (ev.attendanceRequired === undefined) ev.attendanceRequired = true;
+        if (!ev.attendance) ev.attendance = {};
+      });
+      data.tournaments.forEach(t => {
+        if (!t.dates) t.dates = [];
+      });
+      return;
+    }
+  } catch(e) {
+    console.warn('localStorage読み込み失敗:', e);
+  }
+  data = defaultData();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e) {}
+}
+
+async function saveData(){
+  if (!data) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY + '_backup', JSON.stringify(data));
+  } catch(e) {
+    showToast('保存に失敗しました');
+    console.error('保存エラー:', e);
+  }
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function computeStats(p){
+  const matches = p.matches || [];
+  const total = matches.length;
+  const wins = matches.filter(m=>m.result==='win').length;
+  const winRate = total>0 ? (wins/total*100) : 0;
+  const goals = p.goals || [];
+  const doneCount = goals.filter(g=>g.done).length;
+  const goalAchievement = goals.length>0 ? (doneCount/goals.length*100) : null;
+  return {total, wins, winRate, goalAchievement, goalDone: doneCount, goalTotal: goals.length};
+}
+
+function switchTab(tab){
+  // 現在のタブの状態を保存
+  const currentView = document.querySelector('[id^="view-"]:not([style*="display:none"])');
+  if (currentView) {
+    const tabName = currentView.id.replace('view-', '');
+    if (tabName === 'notice') {
+      tabStates.notice.currentPlayer = currentPlayer;
+    } else if (tabName === 'members') {
+      tabStates.members.selectedMember = selectedMember;
+    } else if (tabName === 'ranking') {
+      tabStates.ranking.subTab = rankingSubTab;
+    } else if (tabName === 'mypage') {
+      tabStates.mypage.currentPlayer = currentPlayer;
+    }
+  }
+
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  const targetTab = document.getElementById('tab-'+tab);
+  if(targetTab) targetTab.classList.add('active');
+  
+  document.getElementById('view-notice').style.display = tab==='notice' ? 'block':'none';
+  document.getElementById('view-goals').style.display = tab==='goals' ? 'block':'none';
+  document.getElementById('view-ranking').style.display = tab==='ranking' ? 'block':'none';
+  document.getElementById('view-members').style.display = tab==='members' ? 'block':'none';
+  document.getElementById('view-mypage').style.display = tab==='mypage' ? 'block':'none';
+  
+  if(tab==='notice') {
+    currentPlayer = null;
+    renderNotice();
+  } else if(tab==='goals') {
+    renderGoalsOverview();
+  } else if(tab==='ranking') {
+    rankingSubTab = 'winrate';
+    renderRanking();
+  } else if(tab==='members') {
+    selectedMember = null;
+    renderMembers();
+  } else if(tab==='mypage') {
+    currentPlayer = null;
+    opponentName = '';
+    pendingResult = null;
+    savedScoreMe = 0;
+    savedScoreOpp = 0;
+    selectedEventId = '';
+    newEventNameInput = '';
+    editingMatchIndex = null;
+    renderMyPage();
+  }
+}
+
+function switchRankingSubTab(subTab){
+  rankingSubTab = subTab;
+  renderRanking();
+}
+
+function renderGoalsOverview(){
+  const el = document.getElementById('view-goals');
+  const names = Object.keys(data.players);
+  if(names.length===0){
+    el.innerHTML = '<div class="empty">まだ参加者がいません。マイページから登録してください。</div>';
+    return;
+  }
+  const achievers = names.filter(n => data.players[n].mainGoal && data.players[n].mainGoalDone);
+  let bannerHtml = '';
+  if(achievers.length>0){
+    bannerHtml = `<div class="achievement-banner">
+      ${achievers.map(n=>`
+        <div class="achievement-item">
+          <div class="achievement-name">🎉 ${escapeHtml(n)}さんが目標を達成しました!!</div>
+          <div class="achievement-goal">${escapeHtml(data.players[n].mainGoal)}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  const sorted = names.slice().sort((a,b)=>{
+    const sa = computeStats(data.players[a]), sb = computeStats(data.players[b]);
+    const aRate = sa.goalAchievement ?? -1, bRate = sb.goalAchievement ?? -1;
+    return bRate - aRate;
+  });
+  let html = sorted.map(name=>{
+    const p = data.players[name];
+    const s = computeStats(p);
+    const controlLabel = (p.controlTypes||[]).join('/') || '未設定';
+    const mainGoalHtml = p.mainGoal
+      ? `<div class="main-goal">${p.mainGoalDone?'✅':'🎯'} ${escapeHtml(p.mainGoal)}${p.mainGoalDone?' <span style="font-family:var(--font-mono);font-size:10px;color:var(--win)">達成済み</span>':''}</div>`
+      : `<div class="main-goal empty-goal">目標は未設定です</div>`;
+    const goals = p.goals || [];
+    const chips = goals.slice(0,8).map(g=>`<span class="subgoal-chip ${g.done?'done':''}">${escapeHtml(g.text)}</span>`).join('');
+    const more = goals.length>8 ? `<span class="subgoal-chip">+${goals.length-8}</span>` : '';
+    return `
+      <div class="goal-card">
+        <div class="goal-card-top">
+          <span class="goal-card-name">${escapeHtml(name)}</span>
+          <span class="goal-card-chars">操作:${escapeHtml(controlLabel)} ${p.maxMR ? 'MR:'+escapeHtml(p.maxMR) : ''}</span>
+        </div>
+        ${mainGoalHtml}
+        <div class="mission-rate-block">
+          <div class="mission-rate-label">
+            <span>ミッション達成率</span>
+            <span class="mission-rate-value">${s.goalAchievement!==null?s.goalDone+'/'+s.goalTotal:'–'}</span>
+          </div>
+          <div class="gauge"><div class="gauge-fill goal" style="width:${s.goalAchievement!==null?s.goalAchievement.toFixed(0):0}%"></div></div>
+        </div>
+        <div class="subgoal-chips">${chips}${more}</div>
+      </div>`;
+  }).join('');
+  el.innerHTML = bannerHtml + html;
+}
+
+function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function formatDateBadge(dateStr){
+  if(!dateStr) return {d:'-', m:''};
+  const dt = new Date(dateStr + 'T00:00:00');
+  if(isNaN(dt.getTime())) return {d:'-', m:''};
+  return {d: dt.getDate(), m: (dt.getMonth()+1)+'月 ・ '+['日','月','火','水','木','金','土'][dt.getDay()]+'曜'};
+}
+
+function formatDayShort(dateStr){
+  const dt = new Date(dateStr + 'T00:00:00');
+  if(isNaN(dt.getTime())) return dateStr;
+  const w = ['日','月','火','水','木','金','土'][dt.getDay()];
+  return `${dt.getMonth()+1}/${dt.getDate()}(${w})`;
+}
+
+function genDateRange(start, end){
+  const startD = new Date(start + 'T00:00:00');
+  if(isNaN(startD.getTime())) return [start];
+  const endD = new Date((end || start) + 'T00:00:00');
+  if(isNaN(endD.getTime()) || endD < startD) return [start];
+  const days = [];
+  let d = startD;
+  let count = 0;
+  while(d <= endD && count < 60){
+    days.push(d.toISOString().slice(0,10));
+    d = new Date(d.getTime() + 86400000);
+    count++;
+  }
+  return days;
+}
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function getEventsByDate(){
+  const map = {};
+  (data.events||[]).forEach(ev=>{
+    (ev.dates||[]).forEach(d=>{
+      if(!map[d]) map[d] = [];
+      map[d].push(Object.assign({itemType:'event'}, ev));
+    });
+  });
+  (data.tournaments||[]).forEach(t=>{
+    (t.dates||[]).forEach(d=>{
+      if(!map[d]) map[d] = [];
+      map[d].push(Object.assign({itemType:'tournament'}, t));
+    });
+  });
+  return map;
+}
+
+// 予定(events)のうち、開催日がすべて過去のものかどうか判定
+function isEventFullyPast(ev){
+  const todayStr = new Date().toISOString().slice(0,10);
+  const dates = ev.dates || [];
+  if(dates.length===0) return false;
+  return dates.every(d => d < todayStr);
+}
+
+function datesAreContiguousRange(dates){
+  if(dates.length<2) return false;
+  const full = genDateRange(dates[0], dates[dates.length-1]);
+  return full.length===dates.length && full.every((d,i)=>d===dates[i]);
+}
+
+function changeCalendarMonth(delta){
+  calendarMonth += delta;
+  if(calendarMonth<0){ calendarMonth=11; calendarYear--; }
+  if(calendarMonth>11){ calendarMonth=0; calendarYear++; }
+  renderNotice();
+}
+
+function renderCalendarMonth(){
+  const eventsByDate = getEventsByDate();
+  const year = calendarYear, month = calendarMonth;
+  const firstOfMonth = new Date(year, month, 1);
+  const startWeekday = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+
+  const cells = [];
+  for(let i=0;i<startWeekday;i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+  while(cells.length % 7 !== 0) cells.push(null);
+
+  const weekdayNames = ['日','月','火','水','木','金','土'];
+  const headerHtml = weekdayNames.map((w,i)=>`<div class="cal-weekday ${i===0?'sun':''} ${i===6?'sat':''}">${w}</div>`).join('');
+
+  const cellsHtml = cells.map((d, i)=>{
+    if(d===null) return `<div class="cal-cell empty"></div>`;
+    const col = i % 7;
+    const dateStr = `${year}-${pad2(month+1)}-${pad2(d)}`;
+    const evs = eventsByDate[dateStr] || [];
+    const isToday = dateStr === todayStr;
+    const shown = evs.slice(0,2).map(ev=>`<div class="cal-event-label" title="${escapeHtml(ev.title)}">${escapeHtml(ev.title)}</div>`).join('');
+    const more = evs.length>2 ? `<div class="cal-event-more">+${evs.length-2}件</div>` : '';
+    const clickAttr = evs.length ? ` onclick="openDayModal('${dateStr}')" style="cursor:pointer"` : '';
+    return `<div class="cal-cell ${isToday?'today':''} ${evs.length?'has-event':''} ${col===0?'sun-col':''} ${col===6?'sat-col':''}"${clickAttr}>
+      <div class="cal-daynum">${d}</div>
+      ${shown}${more}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="changeCalendarMonth(-1)">◀</button>
+      <div class="cal-nav-label">${year}年 ${month+1}月</div>
+      <button class="cal-nav-btn" onclick="changeCalendarMonth(1)">▶</button>
+    </div>
+    <div class="cal-legend"><span class="swatch"></span>予定のある日</div>
+    <div class="cal-grid">${headerHtml}${cellsHtml}</div>`;
+}
+
+function renderNotice(){
+  const el = document.getElementById('view-notice');
+  const names = Object.keys(data.players);
+
+  const achievers = names
+    .filter(n => data.players[n].mainGoal && data.players[n].mainGoalDone)
+    .sort((a,b)=> new Date(data.players[b].mainGoalAchievedAt||0) - new Date(data.players[a].mainGoalAchievedAt||0));
+  const achieveHtml = achievers.length>0
+    ? `<div class="achievement-banner">${achievers.map(n=>`
+        <div class="achievement-item">
+          <div class="achievement-name">🎉 ${escapeHtml(n)}さんが目標を達成しました!!</div>
+          <div class="achievement-goal">${escapeHtml(data.players[n].mainGoal)}</div>
+        </div>`).join('')}</div>`
+    : `<div class="empty">まだ達成の報告はありません</div>`;
+
+  // 「あなたは」が選択できるよう修正（currentPlayerを反映）
+  const whoamiOptions = names.map(n=>`<option value="${escapeHtml(n)}" ${currentPlayer===n?'selected':''}>${escapeHtml(n)}</option>`).join('');
+  const upcoming = (data.events||[]).filter(ev=>!isEventFullyPast(ev)).slice().sort((a,b)=> (a.dates[0]||'').localeCompare(b.dates[0]||''));
+  const eventsHtml = upcoming.length>0 ? upcoming.map(ev=>eventCardHtml(ev)).join('') : '<div class="empty">予定はまだありません</div>';
+
+  const calendarHtml = renderCalendarMonth();
+
+  const past = (data.tournaments||[]).slice().sort((a,b)=> (b.dates[0]||'').localeCompare(a.dates[0]||''));
+  const pastShown = past.slice(0,5);
+  const tournamentsHtml = past.length>0 ? pastShown.map(t=>tournamentCardHtml(t)).join('') : '<div class="empty">過去の大会記録はまだありません</div>';
+  const pastMoreHint = past.length>5 ? `<div class="attend-toggle-hint">他 ${past.length-5}件は、カレンダーの日付から確認できます。</div>` : '';
+
+  el.innerHTML = `
+    <div class="notice-section-title">🎉 目標達成の通知</div>
+    ${achieveHtml}
+
+    <div class="notice-section-title">📅 予定管理</div>
+    <div style="background:rgba(232,178,61,0.08);border:1px solid var(--panel-border);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--text);margin-bottom:8px;">📌 予定を追加して、メンバーの出席を確認しましょう</div>
+      <button class="add-open-btn" onclick="openEventModal()" style="margin:0;">＋ 新しい予定を追加</button>
+    </div>
+
+    <div class="whoami">
+      <label style="margin:0">あなたは:</label>
+      <select onchange="setNoticePlayer(this.value)">
+        <option value="">選択してください</option>${whoamiOptions}
+      </select>
+    </div>
+    ${eventsHtml}
+
+    <div class="notice-section-title">📅 カレンダー</div>
+    ${calendarHtml}
+    <div class="attend-toggle-hint">日付をタップすると、その日の予定を確認・出席登録できます。</div>
+
+    <div class="notice-section-title">🏆 過去の大会情報・大会記録</div>
+    ${tournamentsHtml}
+    ${pastMoreHint}
+    <button class="add-open-btn" onclick="openTournamentModal()">＋ 大会記録を追加</button>`;
+}
+
+function eventCardHtml(ev, onlyDay){
+  const isEditing = editingEventId === ev.id;
+  const dates = (ev.dates||[]).slice().sort();
+  const badge = formatDateBadge(dates[0]);
+  let rangeLabel = '';
+  if(dates.length>1){
+    rangeLabel = datesAreContiguousRange(dates)
+      ? `${formatDayShort(dates[0])} 〜 ${formatDayShort(dates[dates.length-1])}(${dates.length}日間)`
+      : `${dates.map(formatDayShort).join('・')}(${dates.length}日間)`;
+  }
+  const attendTag = ev.attendanceRequired
+    ? ''
+    : `<span class="pill" style="background:rgba(139,137,154,.18);color:var(--text-dim);margin-left:6px">出席確認なし</span>`;
+  const daysToShow = onlyDay ? dates.filter(d=>d===onlyDay) : dates;
+
+  if(isEditing){
+    return `
+      <div class="event-card editing">
+        <div class="edit-fields">
+          <div class="edit-row">
+            <div>
+              <label>タイトル</label>
+              <input type="text" id="edit-event-title-${ev.id}" value="${escapeHtml(ev.title)}">
+            </div>
+            <div>
+              <label>出席確認</label>
+              <select id="edit-event-attend-${ev.id}">
+                <option value="true" ${ev.attendanceRequired?'selected':''}>有</option>
+                <option value="false" ${!ev.attendanceRequired?'selected':''}>無</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label>詳細</label>
+            <textarea id="edit-event-desc-${ev.id}">${escapeHtml(ev.description||'')}</textarea>
+          </div>
+          <div class="edit-actions">
+            <button class="primary" onclick="saveEventEdit('${ev.id}')">保存</button>
+            <button class="ghost" onclick="cancelEventEdit()">キャンセル</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  let dayRowsHtml = '';
+  if(ev.attendanceRequired){
+    dayRowsHtml = daysToShow.map(day=>{
+      const dayAtt = (ev.attendance && ev.attendance[day]) || {};
+      const mine = currentPlayer ? dayAtt[currentPlayer] : null;
+      const groups = {yes:[], maybe:[], no:[]};
+      Object.entries(dayAtt).forEach(([n,st])=>{ if(groups[st]) groups[st].push(n); });
+      const chipRow = (label, list, cls) => `
+        <div class="attend-breakdown-row">
+          <span class="attend-breakdown-label">${label}</span>
+          <span class="attend-breakdown-names">${list.length ? list.map(n=>`<span class="name-chip ${cls}">${escapeHtml(n)}</span>`).join('') : '<span class="attend-breakdown-empty">–</span>'}</span>
+        </div>`;
+      return `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--panel-border)">
+          ${dates.length>1 ? `<div style="font-family:var(--font-mono);font-size:11px;color:var(--gold);margin-bottom:6px">${formatDayShort(day)}</div>` : ''}
+          <div class="attend-buttons">
+            <div class="attend-btn yes ${mine==='yes'?'selected':''}" onclick="setAttendance('${ev.id}','${day}','yes')">出席</div>
+            <div class="attend-btn maybe ${mine==='maybe'?'selected':''}" onclick="setAttendance('${ev.id}','${day}','maybe')">未定</div>
+            <div class="attend-btn no ${mine==='no'?'selected':''}" onclick="setAttendance('${ev.id}','${day}','no')">欠席</div>
+          </div>
+          <div class="attend-breakdown">
+            ${chipRow('出席', groups.yes, 'yes')}
+            ${chipRow('未定', groups.maybe, 'maybe')}
+            ${chipRow('欠席', groups.no, 'no')}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  return `
+    <div class="event-card">
+      <div class="event-top">
+        <div class="event-date-badge"><div class="d">${badge.d}</div><div class="m">${badge.m}</div></div>
+        <div style="flex:1">
+          <div class="event-title">${escapeHtml(ev.title)}${attendTag}</div>
+          ${rangeLabel ? `<div class="event-desc" style="color:var(--gold)">${rangeLabel}</div>` : ''}
+          ${ev.description ? `<div class="event-desc">${escapeHtml(ev.description)}</div>` : ''}
+        </div>
+        <div class="event-actions">
+          <button class="edit-btn" onclick="startEditEvent('${ev.id}')">✎ 編集</button>
+          <button class="ghost" onclick="deleteEvent('${ev.id}')">削除</button>
+        </div>
+      </div>
+      ${dayRowsHtml}
+    </div>`;
+}
+
+function tournamentCardHtml(t){
+  const dates = (t.dates||[]).slice().sort();
+  const dateLabel = dates.length>1
+    ? (datesAreContiguousRange(dates)
+        ? `${dates[0]} 〜 ${dates[dates.length-1]}(${dates.length}日間)`
+        : dates.join('・'))
+    : (dates[0] || '日付未設定');
+  return `
+    <div class="tournament-card">
+      <div class="tournament-title">${escapeHtml(t.title)}</div>
+      <div class="tournament-date">${escapeHtml(dateLabel)}</div>
+      ${t.description ? `<div class="tournament-desc" style="white-space:pre-wrap">${escapeHtml(t.description)}</div>` : ''}
+      ${t.result ? `<div class="tournament-result">🏅 ${escapeHtml(t.result)}</div>` : ''}
+      <div style="text-align:right;margin-top:8px;display:flex;justify-content:flex-end;gap:8px">
+        <button class="edit-btn" onclick="openTournamentModal('${t.id}')">✎ 編集</button>
+        <button class="ghost" onclick="deleteTournament('${t.id}')">削除</button>
+      </div>
+    </div>`;
+}
+
+function startEditEvent(id){
+  editingEventId = id;
+  // 編集モードに入ったら詳細モーダルを閉じる
+  closeModal();
+  renderNotice();
+}
+
+function cancelEventEdit(){
+  editingEventId = null;
+  renderNotice();
+}
+
+async function saveEventEdit(id){
+  const ev = data.events.find(e=>e.id===id);
+  if(!ev) return;
+  const title = document.getElementById('edit-event-title-'+id).value.trim();
+  const desc = document.getElementById('edit-event-desc-'+id).value.trim();
+  const attendRequired = document.getElementById('edit-event-attend-'+id).value === 'true';
+  if(!title){ showToast('タイトルを入力してください'); return; }
+  ev.title = title;
+  ev.description = desc;
+  ev.attendanceRequired = attendRequired;
+  editingEventId = null;
+  await saveData();
+  renderNotice();
+  showToast('更新しました');
+}
+
+function openDayModal(dateStr){
+  const items = (getEventsByDate()[dateStr]) || [];
+  const badge = formatDateBadge(dateStr);
+  const bodyHtml = items.length
+    ? items.map(item => item.itemType==='tournament' ? tournamentCardHtml(item) : eventCardHtml(item, dateStr)).join('')
+    : '<div class="empty">この日の予定はありません</div>';
+  openModal(`
+    <div class="modal-head">
+      <h2>${badge.m} ${badge.d}日 の予定</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    ${bodyHtml}
+  `);
+  document.getElementById('modal-box').dataset.dayModal = dateStr;
+}
+
+function setNoticePlayer(v){
+  currentPlayer = v || null;
+  renderNotice();
+}
+
+async function deleteEvent(id){
+  if(!confirm('この予定を削除しますか？')) return;
+  data.events = data.events.filter(e=>e.id!==id);
+  editingEventId = null;
+  await saveData();
+  closeModal();
+  renderNotice();
+  showToast('削除しました');
+}
+
+async function setAttendance(eventId, day, status){
+  if(!currentPlayer){ showToast('先に「あなたは」を選択してください'); return; }
+  const ev = data.events.find(e=>e.id===eventId);
+  if(!ev) return;
+  if(!ev.attendance) ev.attendance = {};
+  if(!ev.attendance[day]) ev.attendance[day] = {};
+  ev.attendance[day][currentPlayer] = status;
+  await saveData();
+  renderNotice();
+  if(document.getElementById('modal-overlay').style.display !== 'none' && document.getElementById('modal-box').dataset.dayModal === day){
+    openDayModal(day);
+  }
+}
+
+async function deleteTournament(id){
+  data.tournaments = data.tournaments.filter(t=>t.id!==id);
+  await saveData();
+  renderNotice();
+}
+
+function openModal(html){
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-box').removeAttribute('data-day-modal');
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+function closeModal(){
+  document.getElementById('modal-overlay').style.display = 'none';
+  document.getElementById('modal-box').innerHTML = '';
+}
+
+let picker = { dates: new Set(), year: _today.getFullYear(), month: _today.getMonth() };
+
+function pickerInit(initialDates){
+  picker = { dates: new Set(initialDates||[]), year: _today.getFullYear(), month: _today.getMonth() };
+  if(initialDates && initialDates.length){
+    const d = new Date(initialDates[0]+'T00:00:00');
+    if(!isNaN(d.getTime())){ picker.year = d.getFullYear(); picker.month = d.getMonth(); }
+  }
+}
+
+function pickerChangeMonth(delta, renderFn){
+  picker.month += delta;
+  if(picker.month<0){ picker.month=11; picker.year--; }
+  if(picker.month>11){ picker.month=0; picker.year++; }
+  window[renderFn]();
+}
+
+function pickerToggleDate(dateStr, renderFn){
+  if(picker.dates.has(dateStr)) picker.dates.delete(dateStr);
+  else picker.dates.add(dateStr);
+  window[renderFn]();
+}
+
+function pickerApplyRange(startId, endId, renderFn){
+  const start = document.getElementById(startId).value;
+  const endRaw = document.getElementById(endId).value;
+  if(!start){ showToast('開始日を選択してください'); return; }
+  const end = endRaw || start;
+  if(end < start){ showToast('終了日は開始日より後にしてください'); return; }
+  genDateRange(start, end).forEach(d=>picker.dates.add(d));
+  window[renderFn]();
+}
+
+function pickerClear(renderFn){
+  picker.dates.clear();
+  window[renderFn]();
+}
+
+function pickerCalendarHtml(onClickFnName){
+  const year = picker.year, month = picker.month;
+  const firstOfMonth = new Date(year, month, 1);
+  const startWeekday = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+  const cells = [];
+  for(let i=0;i<startWeekday;i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+  const weekdayNames = ['日','月','火','水','木','金','土'];
+  const headerHtml = weekdayNames.map(w=>`<div class="picker-weekday">${w}</div>`).join('');
+  const cellsHtml = cells.map(d=>{
+    if(d===null) return `<div class="picker-cell empty"></div>`;
+    const dateStr = `${year}-${pad2(month+1)}-${pad2(d)}`;
+    const isToday = dateStr===todayStr;
+    const isSelected = picker.dates.has(dateStr);
+    return `<div class="picker-cell ${isSelected?'selected':''} ${isToday?'today':''}" onclick="${onClickFnName}('${dateStr}')">${d}</div>`;
+  }).join('');
+  const sortedDates = Array.from(picker.dates).sort();
+  const summaryHtml = sortedDates.length
+    ? `<span>選択中: ${sortedDates.map(formatDayShort).join('・')}</span><button class="picker-clear" onclick="${onClickFnName==='eventModalToggleDate'?'eventModalClear':'tournamentModalClear'}()">すべて解除</button>`
+    : `<span>まだ日付が選択されていません</span>`;
+  return `
+    <div class="picker-cal">
+      <div class="picker-cal-nav">
+        <button type="button" class="picker-cal-btn" onclick="${onClickFnName==='eventModalToggleDate'?'eventModalChangeMonth(-1)':'tournamentModalChangeMonth(-1)'}">◀</button>
+        <div class="picker-cal-label">${year}年 ${month+1}月</div>
+        <button type="button" class="picker-cal-btn" onclick="${onClickFnName==='eventModalToggleDate'?'eventModalChangeMonth(1)':'tournamentModalChangeMonth(1)'}">▶</button>
+      </div>
+      <div class="picker-grid">${headerHtml}${cellsHtml}</div>
+      <div class="picker-selected-summary">${summaryHtml}</div>
+    </div>`;
+}
+
+let eventModalAttendanceRequired = true;
+let eventModalTitle = '';
+let eventModalDesc = '';
+
+function openEventModal(){
+  eventModalAttendanceRequired = true;
+  eventModalTitle = '';
+  eventModalDesc = '';
+  pickerInit([]);
+  renderEventModal();
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+function eventModalChangeMonth(delta){ eventModalSyncInputs(); pickerChangeMonth(delta, 'renderEventModal'); }
+function eventModalSyncInputs(){
+  const titleEl = document.getElementById('event-title-input');
+  const descEl = document.getElementById('event-desc-input');
+  if(titleEl) eventModalTitle = titleEl.value;
+  if(descEl) eventModalDesc = descEl.value;
+}
+function eventModalToggleDate(d){ 
+  eventModalSyncInputs();
+  pickerToggleDate(d, 'renderEventModal');
+}
+function eventModalClear(){ 
+  eventModalSyncInputs();
+  pickerClear('renderEventModal');
+}
+function eventModalApplyRange(){ 
+  eventModalSyncInputs();
+  pickerApplyRange('event-range-start','event-range-end','renderEventModal');
+}
+function eventModalSetAttendance(v){
+  eventModalAttendanceRequired = v;
+  eventModalSyncInputs();
+  renderEventModal();
+  const titleInput = document.getElementById('event-title-input');
+  const descInput = document.getElementById('event-desc-input');
+  if(titleInput) titleInput.value = eventModalTitle;
+  if(descInput) descInput.value = eventModalDesc;
+}
+
+function renderEventModal(){
+  document.getElementById('modal-box').innerHTML = `
+    <div class="modal-head">
+      <h2>📅 予定を追加</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div style="background:rgba(232,178,61,0.06);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text-dim);">
+      💡 予定を追加すると、メンバーが出席・欠席を登録できるようになります。
+    </div>
+    <label>タイトル<span class="req-mark">*</span></label>
+    <input type="text" id="event-title-input" placeholder="例:定期対戦会" value="${escapeHtml(eventModalTitle)}">
+
+    <label>出席確認</label>
+    <div class="choice-group">
+      <div class="choice ${eventModalAttendanceRequired?'win selected':''}" onclick="eventModalSetAttendance(true)">有</div>
+      <div class="choice ${!eventModalAttendanceRequired?'loss selected':''}" onclick="eventModalSetAttendance(false)">無</div>
+    </div>
+    <div class="attend-toggle-hint">「無」の場合、この予定には出席・欠席の登録は行われません。</div>
+
+    <div class="date-section" id="event-date-section">
+      <label>開催日<span class="req-mark">*</span></label>
+      <div class="attend-toggle-hint">期間で範囲指定するか、カレンダーで個別の日にちをタップして選択してください</div>
+      <div class="date-mode-row">
+        <div class="row">
+          <div>
+            <label>開始日</label>
+            <input type="date" id="event-range-start">
+          </div>
+          <div>
+            <label>終了日</label>
+            <input type="date" id="event-range-end">
+          </div>
+        </div>
+        <button type="button" class="btn-small" onclick="eventModalApplyRange()">範囲を追加</button>
+      </div>
+      ${pickerCalendarHtml('eventModalToggleDate')}
+    </div>
+
+    <label>詳細(任意)</label>
+    <textarea id="event-desc-input" placeholder="例:オンライン、19時集合">${escapeHtml(eventModalDesc)}</textarea>
+
+    <button class="primary" onclick="submitEventModal()">予定を追加する</button>
+  `;
+}
+
+function flagFieldError(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.add('input-error');
+  el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+  el.addEventListener('input', function clear(){ el.classList.remove('input-error'); el.removeEventListener('input', clear); });
+  el.focus({preventScroll:true});
+  el.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function flagSectionError(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.add('input-error');
+  el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+  el.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+async function submitEventModal(){
+  const titleInput = document.getElementById('event-title-input');
+  const title = titleInput.value.trim();
+  const description = document.getElementById('event-desc-input').value.trim();
+  const dates = Array.from(picker.dates).sort();
+  const missing = [];
+  if(!title){ flagFieldError('event-title-input'); missing.push('タイトル'); }
+  if(dates.length===0){ flagSectionError('event-date-section'); missing.push('開催日'); }
+  if(missing.length){ showToast(`${missing.join('・')}を入力してください`); return; }
+  data.events.push({id: genId(), title, description, dates, attendanceRequired: eventModalAttendanceRequired, attendance:{}});
+  await saveData();
+  closeModal();
+  renderNotice();
+  showToast('予定を追加しました');
+}
+
+let tournamentModalTitle = '';
+let tournamentModalDesc = '';
+let tournamentModalResult = '';
+let editingTournamentId = null;
+
+function openTournamentModal(id){
+  editingTournamentId = id || null;
+  if(editingTournamentId){
+    const t = (data.tournaments||[]).find(t=>t.id===editingTournamentId);
+    if(!t){ editingTournamentId = null; }
+    tournamentModalTitle = t ? t.title : '';
+    tournamentModalDesc = t ? (t.description||'') : '';
+    tournamentModalResult = t ? (t.result||'') : '';
+    pickerInit(t ? t.dates : []);
+  } else {
+    tournamentModalTitle = '';
+    tournamentModalDesc = '';
+    tournamentModalResult = '';
+    pickerInit([]);
+  }
+  closeModal();
+  renderTournamentModal();
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+// カレンダー操作の直前に入力内容を保存しておく（再描画で消えないように）
+function tournamentModalSyncInputs(){
+  const titleEl = document.getElementById('tournament-title-input');
+  const descEl = document.getElementById('tournament-desc-input');
+  const resultEl = document.getElementById('tournament-result-input');
+  if(titleEl) tournamentModalTitle = titleEl.value;
+  if(descEl) tournamentModalDesc = descEl.value;
+  if(resultEl) tournamentModalResult = resultEl.value;
+}
+
+function tournamentModalChangeMonth(delta){ tournamentModalSyncInputs(); pickerChangeMonth(delta, 'renderTournamentModal'); }
+function tournamentModalToggleDate(d){ tournamentModalSyncInputs(); pickerToggleDate(d, 'renderTournamentModal'); }
+function tournamentModalClear(){ tournamentModalSyncInputs(); pickerClear('renderTournamentModal'); }
+function tournamentModalApplyRange(){ tournamentModalSyncInputs(); pickerApplyRange('tournament-range-start','tournament-range-end','renderTournamentModal'); }
+
+function renderTournamentModal(){
+  const isEditing = !!editingTournamentId;
+  document.getElementById('modal-box').innerHTML = `
+    <div class="modal-head">
+      <h2>🏆 大会記録を${isEditing?'編集':'追加'}</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <label>大会名<span class="req-mark">*</span></label>
+    <input type="text" id="tournament-title-input" placeholder="例:第3回 内部トーナメント" value="${escapeHtml(tournamentModalTitle)}">
+
+    <div class="date-section" id="tournament-date-section">
+      <label>開催日<span class="req-mark">*</span></label>
+      <div class="attend-toggle-hint">期間で範囲指定するか、カレンダーで個別の日にちをタップして選択してください</div>
+      <div class="date-mode-row">
+        <div class="row">
+          <div>
+            <label>開始日</label>
+            <input type="date" id="tournament-range-start">
+          </div>
+          <div>
+            <label>終了日</label>
+            <input type="date" id="tournament-range-end">
+          </div>
+        </div>
+        <button type="button" class="btn-small" onclick="tournamentModalApplyRange()">範囲を追加</button>
+      </div>
+      ${pickerCalendarHtml('tournamentModalToggleDate')}
+    </div>
+
+    <label>概要(任意)</label>
+    <textarea id="tournament-desc-input" placeholder="例:参加12名、シングルエリミネーション">${escapeHtml(tournamentModalDesc)}</textarea>
+
+    <label>結果(任意)</label>
+    <textarea id="tournament-result-input" placeholder="例:優勝 プライドチキン">${escapeHtml(tournamentModalResult)}</textarea>
+
+    <button class="primary" onclick="submitTournamentModal()">${isEditing?'更新する':'追加する'}</button>
+  `;
+}
+
+async function submitTournamentModal(){
+  const title = document.getElementById('tournament-title-input').value.trim();
+  const description = document.getElementById('tournament-desc-input').value.trim();
+  const result = document.getElementById('tournament-result-input').value.trim();
+  const dates = Array.from(picker.dates).sort();
+  const missing = [];
+  if(!title){ flagFieldError('tournament-title-input'); missing.push('大会名'); }
+  if(dates.length===0){ flagSectionError('tournament-date-section'); missing.push('開催日'); }
+  if(missing.length){ showToast(`${missing.join('・')}を入力してください`); return; }
+  if(editingTournamentId){
+    const t = (data.tournaments||[]).find(t=>t.id===editingTournamentId);
+    if(t){
+      t.title = title;
+      t.description = description;
+      t.result = result;
+      t.dates = dates;
+    }
+  } else {
+    data.tournaments.push({id: genId(), title, description, result, dates});
+  }
+  tournamentModalTitle = '';
+  tournamentModalDesc = '';
+  tournamentModalResult = '';
+  const wasEditing = !!editingTournamentId;
+  editingTournamentId = null;
+  await saveData();
+  closeModal();
+  renderNotice();
+  showToast(wasEditing ? '大会記録を更新しました' : '大会記録を追加しました');
+}
+
+function getMRColor(mr){
+  const minMR = 0, maxMR = 2400;
+  const clamped = Math.max(minMR, Math.min(maxMR, mr));
+  const normalized = (clamped - minMR) / (maxMR - minMR);
+  let r, g, b;
+  if (normalized < 0.3) {
+    const t = normalized / 0.3;
+    r = Math.round(26 + (74 - 26) * t);
+    g = Math.round(79 + (168 - 79) * t);
+    b = Math.round(193 + (247 - 193) * t);
+  } else if (normalized < 0.5) {
+    const t = (normalized - 0.3) / 0.2;
+    r = Math.round(74 + (220 - 74) * t);
+    g = Math.round(168 + (220 - 168) * t);
+    b = Math.round(247 + (245 - 247) * t);
+  } else if (normalized < 0.7) {
+    const t = (normalized - 0.5) / 0.2;
+    r = Math.round(220 + (255 - 220) * t);
+    g = Math.round(220 + (160 - 220) * t);
+    b = Math.round(245 + (60 - 245) * t);
+  } else {
+    const t = (normalized - 0.7) / 0.3;
+    r = 255;
+    g = Math.round(160 + (40 - 160) * t);
+    b = Math.round(60 + (40 - 60) * t);
+  }
+  return `rgb(${Math.max(0,Math.min(255,r))}, ${Math.max(0,Math.min(255,g))}, ${Math.max(0,Math.min(255,b))})`;
+}
+
+function renderRanking(){
+  const el = document.getElementById('view-ranking');
+  const names = Object.keys(data.players);
+
+  const subTabsHtml = `
+    <div class="sub-tabs">
+      <div class="sub-tab ${rankingSubTab === 'winrate' ? 'active' : ''}" onclick="switchRankingSubTab('winrate')">🏆 勝率ランキング</div>
+      <div class="sub-tab ${rankingSubTab === 'mr' ? 'active' : ''}" onclick="switchRankingSubTab('mr')">📊 MRランキング</div>
+    </div>
+  `;
+
+  if(rankingSubTab === 'mr'){
+    const withMR = names
+      .filter(n => data.players[n].maxMR && data.players[n].maxMR.trim() !== '')
+      .map(n => ({
+        name: n,
+        mr: parseInt(data.players[n].maxMR, 10) || 0
+      }))
+      .filter(p => p.mr > 0);
+
+    if(withMR.length === 0){
+      el.innerHTML = subTabsHtml + '<div class="empty">MRが登録されているプレイヤーはいません</div>';
+      return;
+    }
+
+    withMR.sort((a,b) => b.mr - a.mr);
+
+    const MR_MIN = 1200;
+    const MR_MAX = 2400;
+
+    const legendHtml = `
+      <div class="mr-legend">
+        <span class="label">0</span>
+        <div class="gradient-bar"></div>
+        <span class="label">2400</span>
+        <span class="label mid">▼1500(中央値)</span>
+      </div>
+    `;
+
+    let html = '';
+    withMR.forEach((p, i) => {
+      const color = getMRColor(p.mr);
+      const rankLabel = i + 1;
+      const medal = rankLabel === 1 ? '🥇' : rankLabel === 2 ? '🥈' : rankLabel === 3 ? '🥉' : `#${rankLabel}`;
+      const gaugePercent = Math.max(0, Math.min(((p.mr - MR_MIN) / (MR_MAX - MR_MIN)) * 100, 100));
+      
+      html += `
+        <div class="rank-card ${rankLabel === 1 ? 'r1' : ''}">
+          <div class="rank-num" style="color:${color}">${medal}</div>
+          <div class="rank-body">
+            <div class="rank-top">
+              <span class="rank-name">${escapeHtml(p.name)}</span>
+              <span class="rank-meta" style="font-size:20px;font-weight:800;color:${color}">${p.mr}</span>
+            </div>
+            <div class="gauge-row">
+              <span class="gauge-label">MR</span>
+              <div class="gauge">
+                <div class="gauge-fill mr" style="width:${gaugePercent}%;"></div>
+              </div>
+              <span class="gauge-val" style="color:${color}">${p.mr}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8px;color:var(--text-dim);padding:0 2px;margin-top:2px;">
+              <span>${MR_MIN}</span>
+              <span>中央値:1500</span>
+              <span>${MR_MAX}</span>
+            </div>
+          </div>
+        </div>`;
+    });
+
+    const avgMR = withMR.reduce((sum, p) => sum + p.mr, 0) / withMR.length;
+    const avgColor = getMRColor(avgMR);
+
+    el.innerHTML = subTabsHtml + `
+      <div style="margin-bottom:16px;text-align:center;font-size:13px;color:var(--text-dim)">
+        平均MR: <span style="font-weight:800;color:${avgColor};font-size:18px">${avgMR.toFixed(0)}</span>
+        （登録者 ${withMR.length}名）
+      </div>
+      ${legendHtml}
+      ${html}
+    `;
+    return;
+  }
+
+  const withMatches = names.filter(n => (data.players[n].matches||[]).length>0);
+  const withoutMatches = names.filter(n => (data.players[n].matches||[]).length===0);
+
+  withMatches.sort((a,b)=>{
+    const sa = computeStats(data.players[a]), sb = computeStats(data.players[b]);
+    if(sb.winRate !== sa.winRate) return sb.winRate - sa.winRate;
+    return sb.wins - sa.wins;
+  });
+  withoutMatches.sort((a,b)=>a.localeCompare(b,'ja'));
+
+  const ordered = [...withMatches, ...withoutMatches];
+
+  if(ordered.length===0){
+    el.innerHTML = subTabsHtml + '<div class="empty">まだ参加者がいません。マイページから登録してください。</div>';
+    return;
+  }
+
+  let html = '';
+  ordered.forEach((name, i)=>{
+    const s = computeStats(data.players[name]);
+    const rankLabel = s.total>0 ? (i+1) : '–';
+    const goalHtml = s.goalAchievement!==null
+      ? `<div class="gauge-row"><span class="gauge-label">目標</span><div class="gauge"><div class="gauge-fill goal" style="width:${s.goalAchievement.toFixed(0)}%"></div></div><span class="gauge-val">${s.goalDone}/${s.goalTotal}</span></div>`
+      : `<div class="gauge-row"><span class="gauge-label">目標</span><div class="gauge"><div class="gauge-fill goal" style="width:0%"></div></div><span class="gauge-val">未設定</span></div>`;
+    html += `
+      <div class="rank-card ${i===0 && s.total>0 ? 'r1':''}">
+        <div class="rank-num">${rankLabel}</div>
+        <div class="rank-body">
+          <div class="rank-top">
+            <span class="rank-name">${escapeHtml(name)}</span>
+            <span class="rank-meta">${s.total}戦 ${s.wins}勝</span>
+          </div>
+          <div class="gauge-row">
+            <span class="gauge-label">勝率</span>
+            <div class="gauge"><div class="gauge-fill winrate" style="width:${s.winRate.toFixed(0)}%"></div></div>
+            <span class="gauge-val">${s.winRate.toFixed(0)}%</span>
+          </div>
+          ${goalHtml}
+        </div>
+      </div>`;
+  });
+  el.innerHTML = subTabsHtml + html;
+}
+
+function renderMembers(){
+  const el = document.getElementById('view-members');
+  selectedMember = null;
+  
+  const names = Object.keys(data.players).slice().sort((a,b)=>a.localeCompare(b,'ja'));
+  if(names.length===0){
+    el.innerHTML = '<div class="empty">まだ参加者がいません。マイページから登録してください。</div>';
+    return;
+  }
+  el.innerHTML = names.map(name=>{
+    const p = data.players[name];
+    const s = computeStats(p);
+    const controlLabel = (p.controlTypes||[]).join('/') || '未設定';
+    return `
+      <div class="rank-card" style="cursor:pointer" onclick="viewMember('${name.replace(/'/g,"\\'")}')">
+        <div class="rank-body">
+          <div class="rank-top">
+            <span class="rank-name">${escapeHtml(name)}</span>
+            <span class="rank-meta">操作:${escapeHtml(controlLabel)}</span>
+          </div>
+          <div class="gauge-row">
+            <span class="gauge-label">勝率</span>
+            <div class="gauge"><div class="gauge-fill winrate" style="width:${s.winRate.toFixed(0)}%"></div></div>
+            <span class="gauge-val">${s.winRate.toFixed(0)}%</span>
+          </div>
+          <div class="rank-meta" style="margin-top:6px">${s.total}戦 ${s.wins}勝 ・ 目標達成 ${s.goalAchievement!==null?s.goalDone+'/'+s.goalTotal:'–'}</div>
+          ${p.maxMR ? `<div class="rank-meta" style="margin-top:2px;color:${getMRColor(parseInt(p.maxMR)||0)}">MR: ${escapeHtml(p.maxMR)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function viewMember(name){ 
+  const el = document.getElementById('view-members');
+  const p = data.players[name];
+  const s = computeStats(p);
+  const controlLabel = (p.controlTypes||[]).join('/') || '未設定';
+
+  const mainGoalHtml = p.mainGoal
+    ? `<div class="main-goal">${p.mainGoalDone?'✅':'🎯'} ${escapeHtml(p.mainGoal)}${p.mainGoalDone?' <span style="font-family:var(--font-mono);font-size:10px;color:var(--win)">達成済み</span>':''}</div>`
+    : `<div class="main-goal empty-goal">目標は未設定です</div>`;
+
+  const goals = p.goals || [];
+  const goalsHtml = goals.length>0
+    ? goals.map(g=>`<div class="history-item"><span style="${g.done?'color:var(--win);text-decoration:line-through':''}">${g.done?'✅':'▫️'} ${escapeHtml(g.text)}</span></div>`).join('')
+    : '<div class="empty" style="padding:10px 0">ミッションはまだありません</div>';
+
+  const matches = (p.matches||[]).slice().reverse().slice(0,10);
+  const historyHtml = matches.length>0
+    ? matches.map(m=>{
+        const scoreStr = m.score ? `(${escapeHtml(m.score)})` : '';
+        const eventStr = m.eventName || '';
+        // 大会名の表示を改善（勝敗に関わらず同じアイコン・色、リンクありは黄色、新規入力は灰色）
+        const eventBadge = eventStr
+          ? (m.eventId && m.eventType
+              ? `<span class="tournament-badge" onclick="jumpToEvent('${escapeHtml(m.eventId)}','${escapeHtml(m.eventType)}')">${escapeHtml(eventStr)}</span>`
+              : `<span class="tournament-badge manual-badge">${escapeHtml(eventStr)}</span>`)
+          : '';
+        return `<div class="history-item">
+          <div class="history-main">
+            <div class="top">
+              <span class="names">${escapeHtml(name)} vs ${escapeHtml(m.opponent)}</span>
+              ${eventBadge}
+            </div>
+            ${scoreStr ? `<div class="score-display"><span class="score-me">${scoreStr.split('-')[0]}</span><span class="vs">vs</span><span class="score-opp">${scoreStr.split('-')[1]||''}</span></div>` : ''}
+          </div>
+          <span class="pill ${m.result}">${m.result==='win'?'WIN':'LOSE'}</span>
+        </div>`;
+      }).join('')
+    : '<div class="empty">まだ記録がありません</div>';
+
+  const mrColor = p.maxMR ? getMRColor(parseInt(p.maxMR)||0) : 'var(--text-dim)';
+
+  el.innerHTML = `
+    <button class="ghost" onclick="renderMembers()">← メンバー一覧へ戻る</button>
+    <div class="card" style="margin-top:12px">
+      <h2>${escapeHtml(name)}<span class="tag" style="background:none;color:var(--text-dim);font-weight:400;padding:0">操作:${escapeHtml(controlLabel)}</span></h2>
+      ${p.maxMR ? `<div style="font-family:var(--font-mono);font-size:15px;font-weight:800;color:${mrColor};margin-bottom:8px">MR: ${escapeHtml(p.maxMR)}</div>` : ''}
+      <div class="gauge-row">
+        <span class="gauge-label">勝率</span>
+        <div class="gauge"><div class="gauge-fill winrate" style="width:${s.winRate.toFixed(0)}%"></div></div>
+        <span class="gauge-val">${s.winRate.toFixed(0)}%</span>
+      </div>
+      <div class="gauge-row">
+        <span class="gauge-label">目標</span>
+        <div class="gauge"><div class="gauge-fill goal" style="width:${s.goalAchievement!==null?s.goalAchievement.toFixed(0):0}%"></div></div>
+        <span class="gauge-val">${s.goalAchievement!==null?s.goalDone+'/'+s.goalTotal:'–'}</span>
+      </div>
+      <div class="rank-meta" style="margin-top:8px">${s.total}戦 ${s.wins}勝</div>
+    </div>
+
+    <div class="card">
+      <h2>🎯 目標</h2>
+      ${mainGoalHtml}
+      <label style="margin-top:14px">ミッション</label>
+      ${goalsHtml}
+    </div>
+
+    <div class="card">
+      <h2>直近の対戦履歴</h2>
+      ${historyHtml}
+    </div>`;
+}
+
+// 大会名バッジを押したらお知らせタブの該当の予定・大会記録の詳細を開く
+function jumpToEvent(id, type){
+  if(!id || !type) return;
+  let dateStr = null;
+  if(type === 'event'){
+    const ev = (data.events||[]).find(e=>e.id===id);
+    if(ev && ev.dates && ev.dates.length) dateStr = ev.dates.slice().sort()[0];
+  } else if(type === 'tournament'){
+    const t = (data.tournaments||[]).find(t=>t.id===id);
+    if(t && t.dates && t.dates.length) dateStr = t.dates.slice().sort()[0];
+  }
+  if(!dateStr) return;
+  switchTab('notice');
+  setTimeout(()=>{ openDayModal(dateStr); }, 60);
+}
+
+function renderMyPage(){
+  const el = document.getElementById('view-mypage');
+  const names = Object.keys(data.players);
+
+  currentPlayer = null;
+  opponentName = '';
+  pendingResult = null;
+  savedScoreMe = 0;
+  savedScoreOpp = 0;
+  selectedEventId = '';
+  newEventNameInput = '';
+  editingMatchIndex = null;
+
+  let selectHtml = `<select id="player-select" onchange="onPlayerChange(this.value)">
+    <option value="" selected>選択してください</option>`;
+  names.forEach(n=>{
+    selectHtml += `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`;
+  });
+  selectHtml += `<option value="__new__">＋ 新規参加者登録</option></select>`;
+
+  let html = `
+    <div class="card">
+      <h2><span class="tag">STEP 1</span>自分を選択</h2>
+      ${selectHtml}
+      <div id="new-player-box" style="display:none">
+        <label>参加者名</label>
+        <input type="text" id="new-player-name" placeholder="例:ハヤト">
+        <button class="primary" onclick="registerPlayer()">登録する</button>
+      </div>
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+function renderMyPageWithPlayer(){
+  const el = document.getElementById('view-mypage');
+  const names = Object.keys(data.players);
+  
+  if(!currentPlayer || !data.players[currentPlayer]){
+    renderMyPage();
+    return;
+  }
+
+  const p = data.players[currentPlayer];
+  const s = computeStats(p);
+
+  const eventOptions = [
+    ...(data.events||[]).map(ev => 
+      `<option value="event:${escapeHtml(ev.id)}" ${selectedEventId===('event:'+ev.id)?'selected':''}>${escapeHtml(ev.title)}</option>`
+    ),
+    ...(data.tournaments||[]).map(t => 
+      `<option value="tournament:${escapeHtml(t.id)}" ${selectedEventId===('tournament:'+t.id)?'selected':''}>${escapeHtml(t.title)}</option>`
+    )
+  ].join('');
+
+  // 対戦相手入力欄（自由入力＋既存プレイヤー選択）
+  const existingPlayers = names.filter(n=>n!==currentPlayer);
+  const playerOptions = existingPlayers.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+
+  // スコアボタンの状態を再現
+  const scoreMeHtml = Array.from({length:11}, (_,i) => 
+    `<button class="score-btn ${i===savedScoreMe?'active':''}" onclick="setScoreMe(${i})">${i}</button>`
+  ).join('');
+  const scoreOppHtml = Array.from({length:11}, (_,i) => 
+    `<button class="score-btn ${i===savedScoreOpp?'active':''}" onclick="setScoreOpp(${i})">${i}</button>`
+  ).join('');
+
+  // 現在の目標入力値を保持（再描画時に消えないように）
+  const currentGoalValue = document.getElementById('main-goal-input') ? document.getElementById('main-goal-input').value : (p.mainGoal || '');
+
+  let html = `
+    <div class="card">
+      <h2><span class="tag">STEP 1</span>自分を選択</h2>
+      <select id="player-select" onchange="onPlayerChange(this.value)">
+        <option value="">選択してください</option>
+        ${Object.keys(data.players).map(n=>`<option value="${escapeHtml(n)}" ${currentPlayer===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}
+        <option value="__new__">＋ 新規参加者登録</option>
+      </select>
+      <div id="new-player-box" style="display:none">
+        <label>参加者名</label>
+        <input type="text" id="new-player-name" placeholder="例:ハヤト">
+        <button class="primary" onclick="registerPlayer()">登録する</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2><span class="tag">STEP 2</span>プロフィール</h2>
+      <label>操作タイプ</label>
+      <div class="choice-group">
+        <label class="checkbox-choice ${(p.controlTypes||[]).includes('C')?'checked-cb':''}">
+          <input type="checkbox" id="control-type-c" ${(p.controlTypes||[]).includes('C')?'checked':''} onchange="this.closest('.checkbox-choice').classList.toggle('checked-cb', this.checked)">
+          <span>クラシック(C)</span>
+        </label>
+        <label class="checkbox-choice ${(p.controlTypes||[]).includes('M')?'checked-cb':''}">
+          <input type="checkbox" id="control-type-m" ${(p.controlTypes||[]).includes('M')?'checked':''} onchange="this.closest('.checkbox-choice').classList.toggle('checked-cb', this.checked)">
+          <span>モダン(M)</span>
+        </label>
+      </div>
+      <label>最大MR</label>
+      <input type="number" id="max-mr-input" value="${escapeHtml(p.maxMR||'')}" placeholder="例:1800">
+      <button class="primary" onclick="saveProfileStep2()">プロフィールを保存</button>
+      <div id="step2-save-status" style="font-size:12px;color:var(--text-dim);margin-top:6px;text-align:center;"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="tag">STEP 3</span>対戦結果を記録</h2>
+      <label>大会名（オプション）</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="event-select" style="flex:1;" onchange="onEventSelect(this.value)">
+          <option value="">選択してください</option>
+          ${eventOptions}
+          <option value="__new__" ${selectedEventId==='__new__'?'selected':''}>＋ 新規入力</option>
+        </select>
+      </div>
+      <div id="new-event-input-box" style="display:${selectedEventId==='__new__'?'block':'none'};margin-top:6px;">
+        <input type="text" id="new-event-name" placeholder="大会名を入力" style="width:100%;" value="${escapeHtml(newEventNameInput)}" oninput="newEventNameInput=this.value">
+      </div>
+      <div class="attend-toggle-hint">お知らせタブで登録した予定・大会記録を選択すると、その大会と結果が連携されます。</div>
+
+      <label style="margin-top:12px">対戦相手（入力または選択）</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="opponent-input" placeholder="対戦相手の名前を入力" style="flex:1;" value="${escapeHtml(opponentName)}" oninput="opponentName=this.value">
+        <span style="color:var(--text-dim);font-size:11px;">または</span>
+        <select id="opponent-select" style="flex:1;" onchange="document.getElementById('opponent-input').value=this.value; opponentName=this.value;">
+          <option value="">選択する</option>
+          ${playerOptions}
+        </select>
+      </div>
+
+      <label style="margin-top:12px">スコア（自分 - 相手）</label>
+      <div class="score-vs">自分</div>
+      <div class="score-buttons" id="score-me-buttons">
+        ${scoreMeHtml}
+      </div>
+      <div class="score-vs">− 対 −</div>
+      <div class="score-buttons" id="score-opp-buttons">
+        ${scoreOppHtml}
+      </div>
+      <div class="score-vs">相手</div>
+
+      <label style="margin-top:12px">結果</label>
+      <div class="choice-group">
+        <div class="choice win ${pendingResult==='win'?'selected':''}" onclick="setResult('win')">勝ち</div>
+        <div class="choice loss ${pendingResult==='loss'?'selected':''}" onclick="setResult('loss')">負け</div>
+      </div>
+      <button class="primary" onclick="recordMatch()">記録する</button>
+    </div>
+
+    <div class="card">
+      <h2><span class="tag">STEP 4</span>今シーズンの目標</h2>
+      <label>目標(このシーズンで一番達成したいこと)</label>
+      <input type="text" id="main-goal-input" value="${escapeHtml(currentGoalValue || p.mainGoal || '')}" placeholder="例:Act毎3000試合こなす">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer">
+        <input type="checkbox" id="main-goal-done-checkbox" ${p.mainGoalDone?'checked':''}>
+        <span style="color:var(--text)">目標を達成した</span>
+      </label>
+
+      <label style="margin-top:20px">ミッション(5〜25個)</label>
+      ${renderGoalList(p)}
+      <label>よくある課題から選ぶ</label>
+      <div class="choice-group" style="flex-wrap:wrap">${renderGoalChips(p)}</div>
+      <label>新しいミッションを追加(自由入力)</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="goal-input" placeholder="例:毎日リプレイを視聴する" style="flex:1;">
+        <button class="primary" onclick="addGoal()" style="margin:0;padding:8px 16px;width:auto;font-size:12px;flex-shrink:0;">追加</button>
+      </div>
+      <button class="primary" onclick="saveStep4()" style="margin-top:14px;">目標を保存</button>
+      <div id="step4-save-status" style="font-size:12px;color:var(--text-dim);margin-top:6px;text-align:center;"></div>
+      <div style="margin-top:16px">
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);letter-spacing:.03em;margin-bottom:6px">ミッション達成率</div>
+        <div class="gauge-row">
+          <div class="gauge"><div class="gauge-fill goal" style="width:${s.goalAchievement!==null?s.goalAchievement.toFixed(0):0}%"></div></div>
+          <span class="gauge-val">${s.goalAchievement!==null?s.goalDone+'/'+s.goalTotal:'–'}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>対戦履歴（編集可能）</h2>
+      ${renderHistoryEditable(p)}
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+async function saveProfileStep2(){
+  if(!currentPlayer) {
+    showToast('先に自分を選択してください');
+    return;
+  }
+  const controlTypes = [];
+  if(document.getElementById('control-type-c').checked) controlTypes.push('C');
+  if(document.getElementById('control-type-m').checked) controlTypes.push('M');
+  const maxMR = document.getElementById('max-mr-input').value.trim();
+
+  const player = data.players[currentPlayer];
+  player.controlTypes = controlTypes;
+  player.maxMR = maxMR;
+  
+  await saveData();
+  
+  const statusEl = document.getElementById('step2-save-status');
+  if(statusEl){
+    statusEl.textContent = '✅ プロフィールを保存しました';
+    statusEl.style.color = 'var(--win)';
+    setTimeout(() => {
+      statusEl.textContent = '';
+    }, 2500);
+  }
+  showToast('プロフィールを保存しました');
+}
+
+async function saveStep4(){
+  if(!currentPlayer) {
+    showToast('先に自分を選択してください');
+    return;
+  }
+  
+  const goalInput = document.getElementById('main-goal-input');
+  const doneCheckbox = document.getElementById('main-goal-done-checkbox');
+  
+  if(!goalInput || !doneCheckbox) {
+    showToast('要素が見つかりません');
+    return;
+  }
+  
+  const goalVal = goalInput.value.trim();
+  const isDone = doneCheckbox.checked;
+
+  const player = data.players[currentPlayer];
+  player.mainGoal = goalVal;
+  player.mainGoalDone = isDone;
+  if(isDone && !player.mainGoalAchievedAt){
+    player.mainGoalAchievedAt = new Date().toISOString();
+  } else if(!isDone){
+    player.mainGoalAchievedAt = null;
+  }
+  
+  await saveData();
+  
+  const statusEl = document.getElementById('step4-save-status');
+  if(statusEl){
+    statusEl.textContent = '✅ 目標を保存しました';
+    statusEl.style.color = 'var(--win)';
+    setTimeout(() => {
+      statusEl.textContent = '';
+    }, 2500);
+  }
+  showToast('目標を保存しました');
+}
+
+function setScoreMe(val){
+  savedScoreMe = val;
+  // 大会名保持のため、現在の選択を保存
+  const evSelect = document.getElementById('event-select');
+  if(evSelect) selectedEventId = evSelect.value;
+  renderMyPageWithPlayer();
+}
+
+function setScoreOpp(val){
+  savedScoreOpp = val;
+  const evSelect = document.getElementById('event-select');
+  if(evSelect) selectedEventId = evSelect.value;
+  renderMyPageWithPlayer();
+}
+
+function onEventSelect(value){
+  selectedEventId = value;
+  renderMyPageWithPlayer();
+}
+
+function renderGoalChips(p){
+  const existing = new Set((p.goals||[]).map(g=>g.text));
+  return GENERIC_GOALS.map((g, idx)=>{
+    if(!g.needsCount){
+      const text = g.build();
+      if(existing.has(text)) return '';
+      return `<div class="choice" style="flex:none;padding:7px 12px;font-weight:500;font-size:12px" onclick="addGoalPreset('${text.replace(/'/g,"\\'")}')">+ ${escapeHtml(g.label)}</div>`;
+    }
+    if(presetExpanded[idx]){
+      return `<div style="display:flex;align-items:center;gap:6px;background:#0f0f16;border:1px solid var(--panel-border);border-radius:8px;padding:6px 8px">
+        <span style="font-size:12px;color:var(--text-dim)">${escapeHtml(g.label.replace('〇','_'))}</span>
+        <input type="number" min="1" id="preset-count-${idx}" placeholder="回数" style="width:64px;padding:6px">
+        <button class="ghost" style="color:var(--win);border-color:var(--win)" onclick="confirmPresetCount(${idx})">追加</button>
+        <button class="ghost" onclick="cancelPresetCount(${idx})">×</button>
+      </div>`;
+    }
+    return `<div class="choice" style="flex:none;padding:7px 12px;font-weight:500;font-size:12px" onclick="togglePresetCount(${idx})">+ ${escapeHtml(g.label)}</div>`;
+  }).join('') || '<div class="empty" style="padding:6px 0;font-size:12px">追加できる定型目標はすべて選択済みです</div>';
+}
+
+function togglePresetCount(idx){ presetExpanded = {[idx]:true}; renderMyPageWithPlayer(); }
+function cancelPresetCount(idx){ presetExpanded[idx] = false; renderMyPageWithPlayer(); }
+
+async function confirmPresetCount(idx){
+  const input = document.getElementById('preset-count-'+idx);
+  const n = parseInt(input.value, 10);
+  if(!n || n<=0){ showToast('回数を入力してください'); return; }
+  presetExpanded[idx] = false;
+  await addGoalPreset(GENERIC_GOALS[idx].build(n));
+}
+
+function renderGoalList(p){
+  const goals = p.goals || [];
+  if(goals.length===0) return '<div class="empty" style="padding:14px 0">まだ目標がありません。下から追加してください</div>';
+  return `<div style="margin-bottom:6px">` + goals.map((g, i)=>`
+    <div class="history-item">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <input type="checkbox" ${g.done?'checked':''} onchange="toggleGoal(${i})" style="flex-shrink:0">
+        <span style="${g.done?'color:var(--win);text-decoration:line-through':''};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(g.text)}</span>
+      </span>
+      <button class="ghost" onclick="deleteGoal(${i})">削除</button>
+    </div>`).join('') + `</div>`;
+}
+
+// 編集可能な履歴表示（インライン編集）
+function renderHistoryEditable(p){
+  const matches = p.matches || [];
+  if(matches.length===0) return '<div class="empty">まだ記録がありません</div>';
+
+  const names = Object.keys(data.players);
+
+  return matches.map((m, idx) => {
+    const isEditing = (editingMatchIndex === idx);
+    const eventStr = m.eventName || '';
+    const scoreParts = m.score ? m.score.split('-') : ['',''];
+    const scoreMe = scoreParts[0] || '';
+    const scoreOpp = scoreParts[1] || '';
+
+    if(isEditing){
+      // 編集フォーム
+      return `
+        <div class="match-edit-row" style="background:rgba(232,178,61,0.08);border:1px solid var(--gold);">
+          <input type="text" id="edit-opponent-${idx}" value="${escapeHtml(m.opponent)}" placeholder="相手" style="flex:1.5;">
+          <div class="score-edit">
+            <input type="number" id="edit-score-me-${idx}" value="${escapeHtml(scoreMe)}" min="0" style="width:45px;">
+            <span>−</span>
+            <input type="number" id="edit-score-opp-${idx}" value="${escapeHtml(scoreOpp)}" min="0" style="width:45px;">
+          </div>
+          <select id="edit-result-${idx}">
+            <option value="win" ${m.result==='win'?'selected':''}>勝ち</option>
+            <option value="loss" ${m.result==='loss'?'selected':''}>負け</option>
+          </select>
+          <button class="primary" style="margin:0;padding:4px 10px;font-size:11px;width:auto;" onclick="saveMatchEdit(${idx})">保存</button>
+          <button class="ghost" style="margin:0;padding:4px 10px;font-size:11px;" onclick="cancelMatchEdit()">取消</button>
+        </div>
+      `;
+    }
+
+    const eventBadge = eventStr
+      ? (m.eventId && m.eventType
+          ? `<span class="tournament-badge" onclick="jumpToEvent('${escapeHtml(m.eventId)}','${escapeHtml(m.eventType)}')">${escapeHtml(eventStr)}</span>`
+          : `<span class="tournament-badge manual-badge">${escapeHtml(eventStr)}</span>`)
+      : '';
+
+    return `
+      <div class="history-item">
+        <div class="history-main">
+          <div class="top">
+            <span class="names">${escapeHtml(currentPlayer)} vs ${escapeHtml(m.opponent)}</span>
+            ${eventBadge}
+          </div>
+          ${m.score ? `<div class="score-display"><span class="score-me">${escapeHtml(scoreMe)}</span><span class="vs">vs</span><span class="score-opp">${escapeHtml(scoreOpp)}</span></div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span class="pill ${m.result}">${m.result==='win'?'WIN':'LOSE'}</span>
+          <button class="edit-btn" onclick="startMatchEdit(${idx})" style="font-size:10px;padding:2px 6px;">✎</button>
+          <button class="ghost" onclick="undoMatch(${idx})" style="font-size:10px;padding:2px 6px;">削除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function startMatchEdit(idx){
+  editingMatchIndex = idx;
+  renderMyPageWithPlayer();
+}
+
+function cancelMatchEdit(){
+  editingMatchIndex = null;
+  renderMyPageWithPlayer();
+}
+
+async function saveMatchEdit(idx){
+  if(!currentPlayer) return;
+  const opponent = document.getElementById(`edit-opponent-${idx}`).value.trim();
+  const scoreMe = parseInt(document.getElementById(`edit-score-me-${idx}`).value, 10) || 0;
+  const scoreOpp = parseInt(document.getElementById(`edit-score-opp-${idx}`).value, 10) || 0;
+  const result = document.getElementById(`edit-result-${idx}`).value;
+  if(!opponent){ showToast('対戦相手を入力してください'); return; }
+
+  const match = data.players[currentPlayer].matches[idx];
+  const oldOpponent = match.opponent;
+  const oldScore = match.score;
+  const oldResult = match.result;
+  const newScore = `${scoreMe}-${scoreOpp}`;
+
+  // 自分の試合を更新
+  match.opponent = opponent;
+  match.score = newScore;
+  match.result = result;
+
+  // 相手の試合も更新（存在する場合）
+  if(data.players[oldOpponent]){
+    const oppMatches = data.players[oldOpponent].matches;
+    for(let i=0; i<oppMatches.length; i++){
+      if(oppMatches[i].opponent === currentPlayer && oppMatches[i].score === oldScore && oppMatches[i].result === (oldResult === 'win' ? 'loss' : 'win')){
+        oppMatches[i].opponent = opponent;
+        oppMatches[i].score = `${scoreOpp}-${scoreMe}`;
+        oppMatches[i].result = result === 'win' ? 'loss' : 'win';
+        break;
+      }
+    }
+  }
+
+  // もし相手が変わった場合で、新しい相手が既存プレイヤーならその相手にも反映
+  if(opponent !== oldOpponent && data.players[opponent]){
+    // 相手の試合に追加（古い相手の分は削除済み）
+    const oppResult = result === 'win' ? 'loss' : 'win';
+    data.players[opponent].matches.push({
+      opponent: currentPlayer,
+      result: oppResult,
+      score: `${scoreOpp}-${scoreMe}`,
+      eventName: match.eventName || '',
+      eventId: match.eventId || null,
+      eventType: match.eventType || null,
+      date: match.date || new Date().toISOString()
+    });
+  }
+
+  editingMatchIndex = null;
+  await saveData();
+  renderMyPageWithPlayer();
+  showToast('更新しました');
+}
+
+function onPlayerChange(v){
+  if(v==='__new__'){
+    document.getElementById('new-player-box').style.display='block';
+    currentPlayer = null;
+  } else {
+    currentPlayer = v || null;
+    opponentName = '';
+    pendingResult = null;
+    savedScoreMe = 0;
+    savedScoreOpp = 0;
+    selectedEventId = '';
+    newEventNameInput = '';
+    editingMatchIndex = null;
+    if(currentPlayer){
+      renderMyPageWithPlayer();
+    } else {
+      renderMyPage();
+    }
+  }
+}
+
+async function registerPlayer(){
+  const input = document.getElementById('new-player-name');
+  const name = input.value.trim();
+  if(!name){ showToast('名前を入力してください'); return; }
+  if(data.players[name]){ showToast('その名前は既に登録されています'); return; }
+  data.players[name] = {matches:[], goals:[], controlTypes:[], maxMR:'', mainGoal:'', mainGoalDone:false};
+  currentPlayer = name;
+  await saveData();
+  renderMyPageWithPlayer();
+  showToast(`${name} さんを登録しました`);
+}
+
+function setResult(r){ 
+  pendingResult = r; 
+  // 大会名保持のため、現在の選択を保存
+  const evSelect = document.getElementById('event-select');
+  if(evSelect) selectedEventId = evSelect.value;
+  renderMyPageWithPlayer();
+}
+
+async function recordMatch(){
+  if(!currentPlayer) return;
+  
+  const oppInput = document.getElementById('opponent-input');
+  const opponent = oppInput ? oppInput.value.trim() : '';
+  if(!opponent){ showToast('対戦相手を入力または選択してください'); return; }
+  if(!pendingResult){ showToast('勝敗を選択してください'); return; }
+  
+  const scoreStr = `${savedScoreMe}-${savedScoreOpp}`;
+  
+  const eventSelect = document.getElementById('event-select');
+  let eventName = '';
+  let eventId = null;
+  let eventType = null;
+  if(eventSelect){
+    const selectedValue = eventSelect.value;
+    if(selectedValue === '__new__'){
+      const newEventInput = document.getElementById('new-event-name');
+      eventName = newEventInput ? newEventInput.value.trim() : '';
+    } else if(selectedValue.startsWith('event:')){
+      const id = selectedValue.slice(6);
+      const ev = data.events.find(e => e.id === id);
+      if(ev){ eventName = ev.title; eventId = id; eventType = 'event'; }
+    } else if(selectedValue.startsWith('tournament:')){
+      const id = selectedValue.slice(11);
+      const t = data.tournaments.find(t => t.id === id);
+      if(t){ eventName = t.title; eventId = id; eventType = 'tournament'; }
+    }
+  }
+  
+  data.players[currentPlayer].matches.push({
+    opponent, 
+    result: pendingResult, 
+    score: scoreStr,
+    eventName,
+    eventId,
+    eventType,
+    date: new Date().toISOString()
+  });
+  
+  if(data.players[opponent]){
+    const oppResult = pendingResult === 'win' ? 'loss' : 'win';
+    data.players[opponent].matches.push({
+      opponent: currentPlayer,
+      result: oppResult,
+      score: `${savedScoreOpp}-${savedScoreMe}`,
+      eventName,
+      eventId,
+      eventType,
+      date: new Date().toISOString()
+    });
+  }
+  
+  if(eventSelect && eventSelect.value.startsWith('event:')){
+    const eventId = eventSelect.value.slice(6);
+    const ev = data.events.find(e => e.id === eventId);
+    if(ev && ev.attendanceRequired){
+      const todayStr = new Date().toISOString().slice(0,10);
+      if(!ev.attendance[todayStr]) ev.attendance[todayStr] = {};
+      ev.attendance[todayStr][currentPlayer] = 'yes';
+    }
+  }
+  
+  pendingResult = null;
+  opponentName = '';
+  savedScoreMe = 0;
+  savedScoreOpp = 0;
+  selectedEventId = '';
+  newEventNameInput = '';
+  await saveData();
+  renderMyPageWithPlayer();
+  showToast('記録しました');
+}
+
+async function undoMatch(idx){
+  if(!currentPlayer) return;
+  const match = data.players[currentPlayer].matches[idx];
+  if(!match) return;
+  
+  const opponent = match.opponent;
+  if(data.players[opponent]){
+    const oppMatches = data.players[opponent].matches;
+    for(let i = oppMatches.length - 1; i >= 0; i--){
+      if(oppMatches[i].opponent === currentPlayer && 
+         oppMatches[i].date === match.date){
+        oppMatches.splice(i, 1);
+        break;
+      }
+    }
+  }
+  
+  data.players[currentPlayer].matches.splice(idx,1);
+  editingMatchIndex = null;
+  await saveData();
+  renderMyPageWithPlayer();
+  showToast('削除しました');
+}
+
+async function toggleMainGoalDone(checked){
+  if(!currentPlayer) return;
+  data.players[currentPlayer].mainGoalDone = checked;
+  data.players[currentPlayer].mainGoalAchievedAt = checked ? new Date().toISOString() : null;
+  await saveData();
+  renderMyPageWithPlayer();
+  if(checked) showToast('🎉 目標達成、おめでとうございます!');
+}
+
+async function addGoalPreset(text){
+  if(!currentPlayer) return;
+  const goals = data.players[currentPlayer].goals || (data.players[currentPlayer].goals = []);
+  if(goals.some(g=>g.text===text)) return;
+  if(goals.length >= MAX_GOALS){ showToast(`目標は最大${MAX_GOALS}個までです`); return; }
+  goals.push({text, done:false});
+  await saveData();
+  renderMyPageWithPlayer();
+  showToast('追加しました');
+}
+
+async function addGoal(){
+  if(!currentPlayer) return;
+  const input = document.getElementById('goal-input');
+  const text = input.value.trim();
+  if(!text){ showToast('目標を入力してください'); return; }
+  const goals = data.players[currentPlayer].goals || (data.players[currentPlayer].goals = []);
+  if(goals.length >= MAX_GOALS){ showToast(`目標は最大${MAX_GOALS}個までです`); return; }
+  goals.push({text, done:false});
+  await saveData();
+  renderMyPageWithPlayer();
+  showToast(goals.length < MIN_GOALS_HINT ? `追加しました(目安は${MIN_GOALS_HINT}個以上)` : '追加しました');
+}
+
+async function toggleGoal(idx){
+  if(!currentPlayer) return;
+  const g = data.players[currentPlayer].goals[idx];
+  g.done = !g.done;
+  await saveData();
+  renderMyPageWithPlayer();
+}
+
+async function deleteGoal(idx){
+  if(!currentPlayer) return;
+  data.players[currentPlayer].goals.splice(idx,1);
+  await saveData();
+  renderMyPageWithPlayer();
+}
+
+async function resetAll(){
+  if(!confirm('全データを消去して初期状態に戻します。よろしいですか?')) return;
+  data = defaultData();
+  currentPlayer = null;
+  editingEventId = null;
+  selectedMember = null;
+  rankingSubTab = 'winrate';
+  savedScoreMe = 0;
+  savedScoreOpp = 0;
+  opponentName = '';
+  selectedEventId = '';
+  newEventNameInput = '';
+  editingMatchIndex = null;
+  await saveData();
+  switchTab('ranking');
+  showToast('リセットしました');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+(async function init(){
+  document.getElementById('view-notice').innerHTML = '<div class="empty">読み込み中...</div>';
+  await loadData();
+  currentPlayer = null;
+  renderNotice();
+  renderGoalsOverview();
+  renderRanking();
+  renderMembers();
+  renderMyPage();
+})();
+</script>
+</body>
+</html>
