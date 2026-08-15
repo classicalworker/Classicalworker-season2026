@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Classical Worker Lab</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
   :root{
     --bg:#121218;
@@ -96,6 +99,32 @@
     border-radius:4px;
     letter-spacing:.1em;
   }
+
+  .sync-status{
+    background:rgba(232,178,61,0.08);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:12px 16px;
+    margin-bottom:16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .sync-status .status-dot{
+    display:inline-block;
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    margin-right:6px;
+  }
+  .sync-status .status-dot.online{background:var(--win);}
+  .sync-status .status-dot.offline{background:var(--loss);}
+  .sync-status .status-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 
   label{display:block;font-size:12px;color:var(--text-dim);margin:12px 0 6px;}
   select,input[type=number],input[type=text],input[type=date]{
@@ -658,6 +687,15 @@
     <div class="sub">クラシカルワーカー　メンバーサイト</div>
   </header>
 
+  <!-- 同期ステータス表示 -->
+  <div class="sync-status" id="sync-status">
+    <span>
+      <span class="status-dot online" id="sync-dot"></span>
+      <span id="sync-label">☁️ クラウド同期: オンライン</span>
+    </span>
+    <span style="font-size:10px;color:var(--text-dim);" id="sync-last-updated">最終更新: なし</span>
+  </div>
+
   <div class="tabs">
     <div class="tab active" id="tab-notice" onclick="switchTab('notice')">📢 お知らせ</div>
     <div class="tab" id="tab-goals" onclick="switchTab('goals')">🎯 目標</div>
@@ -673,7 +711,8 @@
   <div id="view-mypage" style="display:none"></div>
 
   <div class="footer-note"><br>
-  <button onclick="resetAll()">全データをリセット</button></div>
+  <button onclick="resetAll()">全データをリセット</button>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
@@ -689,6 +728,23 @@
 <script>
 const STORAGE_KEY = 'classical_worker_2026_data';
 const SEED_PLAYERS = ["にゃんたかたー","プライドチキン","キタロー","ウーロン茶","れんたん","うーろん","ちゃぶ台","シャミセン","なかじま","ゆび","kaz_bwc","こなつ","エインセル河本","せば","しみちん","けんじろう","SAJ","AKAZUKIN","田井中 良樹","こうへー","でみ。","甘えっさん","ラスペーシア","Anne","ののの","shinsei","ココノツ","KFC-11","かーず","横須賀ふたば","サクリ"];
+
+// ============================================
+// Firebase設定（あなたのFirebaseの値に置き換え）
+// ============================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDYNGJnZaUm90jclcgwLM4bqECxUPlYaGU",
+  authDomain: "classicalworkerlab.firebaseapp.com",
+  databaseURL: "https://classicalworkerlab-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "classicalworkerlab",
+  storageBucket: "classicalworkerlab.firebasestorage.app",
+  messagingSenderId: "1017684350339",
+  appId: "1:1017684350339:web:8f6b9e208a4694adc852b6"
+};
+
+// Firebase初期化
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
 
 let data = null;
 let currentPlayer = null;
@@ -732,6 +788,89 @@ let tabStates = {
   ranking: { subTab: 'winrate' },
   mypage: { currentPlayer: null }
 };
+
+// ============================================
+// Firebase同期機能
+// ============================================
+
+// Firebaseからデータを読み込む
+async function loadFromFirebase() {
+  try {
+    const snapshot = await firebase.database().ref('classical_worker/data').once('value');
+    const firebaseData = snapshot.val();
+    
+    if (firebaseData) {
+      // FirebaseのデータでlocalStorageを上書き
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(firebaseData));
+      data = firebaseData;
+      updateSyncStatus(true, '読み込み完了');
+      return true;
+    } else {
+      updateSyncStatus(true, 'データなし');
+      return false;
+    }
+  } catch (error) {
+    console.error('Firebase読み込みエラー:', error);
+    updateSyncStatus(false, '読み込みエラー');
+    return false;
+  }
+}
+
+// Firebaseにデータを保存する
+async function saveToFirebase() {
+  try {
+    const currentData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    await firebase.database().ref('classical_worker/data').set(currentData);
+    updateSyncStatus(true, '保存完了');
+    updateLastUpdated();
+    return true;
+  } catch (error) {
+    console.error('Firebase保存エラー:', error);
+    updateSyncStatus(false, '保存エラー');
+    return false;
+  }
+}
+
+// データの変更をリアルタイムで監視する
+function listenFirebaseChanges() {
+  firebase.database().ref('classical_worker/data').on('value', (snapshot) => {
+    const newData = snapshot.val();
+    if (newData) {
+      const currentData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      // データに変更があった場合のみ更新
+      if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+        data = newData;
+        showToast('🔄 他のユーザーがデータを更新しました');
+        // 全画面を再描画
+        renderAllViews();
+        updateLastUpdated();
+      }
+    }
+  });
+}
+
+function updateSyncStatus(online, label){
+  const dot = document.getElementById('sync-dot');
+  const labelEl = document.getElementById('sync-label');
+  if(online){
+    dot.className = 'status-dot online';
+    labelEl.textContent = '☁️ クラウド同期: オンライン ' + (label || '');
+  } else {
+    dot.className = 'status-dot offline';
+    labelEl.textContent = '⚠️ クラウド同期: オフライン (' + (label || '') + ')';
+  }
+}
+
+function updateLastUpdated(){
+  const el = document.getElementById('sync-last-updated');
+  if(el){
+    const now = new Date();
+    el.textContent = '最終更新: ' + now.toLocaleTimeString('ja-JP');
+  }
+}
+
+// ============================================
 
 function defaultData(){
   const players = {};
@@ -780,8 +919,21 @@ async function loadData(){
 async function saveData(){
   if (!data) return;
   try {
+    // localStorageに保存
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     localStorage.setItem(STORAGE_KEY + '_backup', JSON.stringify(data));
+    
+    // Firebaseにも保存（非同期で実行、エラーは握りつぶさない）
+    try {
+      await firebase.database().ref('classical_worker/data').set(data);
+      updateSyncStatus(true, '保存完了');
+      updateLastUpdated();
+    } catch(fbError) {
+      console.warn('Firebase保存エラー:', fbError);
+      updateSyncStatus(false, '保存エラー');
+      // ローカルには保存されているのでユーザーには通知しない（サイレント）
+    }
+    
   } catch(e) {
     showToast('保存に失敗しました');
     console.error('保存エラー:', e);
@@ -805,6 +957,15 @@ function computeStats(p){
   const doneCount = goals.filter(g=>g.done).length;
   const goalAchievement = goals.length>0 ? (doneCount/goals.length*100) : null;
   return {total, wins, winRate, goalAchievement, goalDone: doneCount, goalTotal: goals.length};
+}
+
+// 全画面を再描画する関数
+function renderAllViews() {
+  renderNotice();
+  renderGoalsOverview();
+  renderRanking();
+  renderMembers();
+  renderMyPage();
 }
 
 function switchTab(tab){
@@ -1198,7 +1359,6 @@ function tournamentCardHtml(t){
 
 function startEditEvent(id){
   editingEventId = id;
-  // 編集モードに入ったら詳細モーダルを閉じる
   closeModal();
   renderNotice();
 }
@@ -1796,7 +1956,6 @@ function viewMember(name){
     ? matches.map(m=>{
         const scoreStr = m.score ? `(${escapeHtml(m.score)})` : '';
         const eventStr = m.eventName || '';
-        // 大会名の表示を改善（勝敗に関わらず同じアイコン・色、リンクありは黄色、新規入力は灰色）
         const eventBadge = eventStr
           ? (m.eventId && m.eventType
               ? `<span class="tournament-badge" onclick="jumpToEvent('${escapeHtml(m.eventId)}','${escapeHtml(m.eventType)}')">${escapeHtml(eventStr)}</span>`
@@ -2116,7 +2275,6 @@ async function saveStep4(){
 
 function setScoreMe(val){
   savedScoreMe = val;
-  // 大会名保持のため、現在の選択を保存
   const evSelect = document.getElementById('event-select');
   if(evSelect) selectedEventId = evSelect.value;
   renderMyPageWithPlayer();
@@ -2193,7 +2351,6 @@ function renderHistoryEditable(p){
     const scoreOpp = scoreParts[1] || '';
 
     if(isEditing){
-      // 編集フォーム
       return `
         <div class="match-edit-row" style="background:rgba(232,178,61,0.08);border:1px solid var(--gold);">
           <input type="text" id="edit-opponent-${idx}" value="${escapeHtml(m.opponent)}" placeholder="相手" style="flex:1.5;">
@@ -2260,12 +2417,10 @@ async function saveMatchEdit(idx){
   const oldResult = match.result;
   const newScore = `${scoreMe}-${scoreOpp}`;
 
-  // 自分の試合を更新
   match.opponent = opponent;
   match.score = newScore;
   match.result = result;
 
-  // 相手の試合も更新（存在する場合）
   if(data.players[oldOpponent]){
     const oppMatches = data.players[oldOpponent].matches;
     for(let i=0; i<oppMatches.length; i++){
@@ -2278,9 +2433,7 @@ async function saveMatchEdit(idx){
     }
   }
 
-  // もし相手が変わった場合で、新しい相手が既存プレイヤーならその相手にも反映
   if(opponent !== oldOpponent && data.players[opponent]){
-    // 相手の試合に追加（古い相手の分は削除済み）
     const oppResult = result === 'win' ? 'loss' : 'win';
     data.players[opponent].matches.push({
       opponent: currentPlayer,
@@ -2334,7 +2487,6 @@ async function registerPlayer(){
 
 function setResult(r){ 
   pendingResult = r; 
-  // 大会名保持のため、現在の選択を保存
   const evSelect = document.getElementById('event-select');
   if(evSelect) selectedEventId = evSelect.value;
   renderMyPageWithPlayer();
@@ -2499,6 +2651,12 @@ async function resetAll(){
   selectedEventId = '';
   newEventNameInput = '';
   editingMatchIndex = null;
+  
+  // Firebaseもリセット
+  try {
+    await firebase.database().ref('classical_worker/data').set(data);
+  } catch(e) {}
+  
   await saveData();
   switchTab('ranking');
   showToast('リセットしました');
@@ -2511,12 +2669,26 @@ function escapeHtml(s){
 (async function init(){
   document.getElementById('view-notice').innerHTML = '<div class="empty">読み込み中...</div>';
   await loadData();
-  currentPlayer = null;
-  renderNotice();
-  renderGoalsOverview();
-  renderRanking();
-  renderMembers();
-  renderMyPage();
+  
+  // Firebaseからデータを読み込み（存在すれば上書き）
+  const hasFirebaseData = await loadFromFirebase();
+  
+  if (hasFirebaseData) {
+    // Firebaseのデータで再描画
+    renderAllViews();
+    updateLastUpdated();
+  } else {
+    // Firebaseにデータがない場合は、現在のデータをFirebaseにアップロード
+    await saveToFirebase();
+    renderNotice();
+    renderGoalsOverview();
+    renderRanking();
+    renderMembers();
+    renderMyPage();
+  }
+  
+  // リアルタイム監視を開始
+  listenFirebaseChanges();
 })();
 </script>
 </body>
