@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Classical Worker Lab</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   :root{
     --bg:#121218;
@@ -687,6 +690,22 @@
 </div>
 
 <script>
+// ===== Firebase設定 =====
+// ご自身のFirebaseプロジェクトの設定に置き換えてください
+const firebaseConfig = {
+  apiKey: "AIzaSyDYNGJnZaUm90jclcgwLM4bqECxUPlYaGU",
+  authDomain: "classicalworkerlab.firebaseapp.com",
+  databaseURL: "https://classicalworkerlab-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "classicalworkerlab",
+  storageBucket: "classicalworkerlab.firebasestorage.app",
+  messagingSenderId: "1017684350339",
+  appId: "1:1017684350339:web:8f6b9e208a4694adc852b6"
+};
+
+// Firebase初期化
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
 const STORAGE_KEY = 'classical_worker_2026_data';
 const SEED_PLAYERS = ["にゃんたかたー","プライドチキン","キタロー","ウーロン茶","れんたん","うーろん","ちゃぶ台","シャミセン","なかじま","ゆび","kaz_bwc","こなつ","エインセル河本","せば","しみちん","けんじろう","SAJ","AKAZUKIN","田井中 良樹","こうへー","でみ。","甘えっさん","ラスペーシア","Anne","ののの","shinsei","ココノツ","KFC-11","かーず","横須賀ふたば","サクリ"];
 
@@ -705,6 +724,10 @@ let newEventNameInput = '';
 
 // 編集中の対戦履歴インデックス (マイページ)
 let editingMatchIndex = null;
+
+// Firebase同期フラグ
+let isFirebaseSyncing = false;
+let firebaseListener = null;
 
 const MAX_GOALS = 25;
 const MIN_GOALS_HINT = 5;
@@ -809,13 +832,120 @@ function normalizeData(data){
   });
 }
 
+// Firebaseからデータを読み込む
+async function loadDataFromFirebase(){
+  try {
+    const snapshot = await database.ref('classical_worker_data').once('value');
+    const firebaseData = snapshot.val();
+    if (firebaseData) {
+      // データを補正
+      normalizeData(firebaseData);
+      return firebaseData;
+    }
+  } catch(e) {
+    console.warn('Firebase読み込みエラー:', e);
+  }
+  return null;
+}
+
+// Firebaseにデータを保存
+async function saveDataToFirebase(dataToSave){
+  if (isFirebaseSyncing) return;
+  try {
+    isFirebaseSyncing = true;
+    await database.ref('classical_worker_data').set(dataToSave);
+  } catch(e) {
+    console.error('Firebase保存エラー:', e);
+    showToast('Firebaseへの保存に失敗しました');
+  } finally {
+    isFirebaseSyncing = false;
+  }
+}
+
+// Firebaseのリアルタイムリスナーを設定
+function setupFirebaseListener(){
+  if (firebaseListener) {
+    firebaseListener.off();
+    firebaseListener = null;
+  }
+  
+  firebaseListener = database.ref('classical_worker_data');
+  firebaseListener.on('value', (snapshot) => {
+    const firebaseData = snapshot.val();
+    if (!firebaseData) return;
+    
+    // Firebaseからの更新が自分の更新によるものかチェック
+    if (isFirebaseSyncing) return;
+    
+    // データを補正
+    normalizeData(firebaseData);
+    
+    // 現在のデータと比較して変更があれば更新
+    const currentDataStr = JSON.stringify(data);
+    const newDataStr = JSON.stringify(firebaseData);
+    if (currentDataStr !== newDataStr) {
+      data = firebaseData;
+      // ローカルストレージにもバックアップ
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch(e) {}
+      
+      // 現在のタブを再描画
+      const activeTab = document.querySelector('.tab.active');
+      if (activeTab) {
+        const tabId = activeTab.id.replace('tab-', '');
+        refreshCurrentTab(tabId);
+      }
+      showToast('データが更新されました');
+    }
+  });
+}
+
+// 現在のタブを再描画
+function refreshCurrentTab(tab){
+  switch(tab){
+    case 'notice': renderNotice(); break;
+    case 'goals': renderGoalsOverview(); break;
+    case 'ranking': renderRanking(); break;
+    case 'members': renderMembers(); break;
+    case 'mypage': 
+      if(currentPlayer){
+        renderMyPageWithPlayer();
+      } else {
+        renderMyPage();
+      }
+      break;
+  }
+}
+
 async function loadData(){
+  try {
+    // まずFirebaseから読み込みを試みる
+    const firebaseData = await loadDataFromFirebase();
+    if (firebaseData) {
+      data = firebaseData;
+      // ローカルストレージにもバックアップ
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch(e) {}
+      // Firebaseリスナーを設定
+      setupFirebaseListener();
+      return;
+    }
+  } catch(e) {
+    console.warn('Firebase読み込み失敗:', e);
+  }
+  
+  // Firebaseにデータがない場合はローカルストレージから読み込み
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       data = JSON.parse(stored);
-      // データ補正（共通処理）
       normalizeData(data);
+      // Firebaseにデータを同期
+      await saveDataToFirebase(data);
+      // Firebaseリスナーを設定
+      setupFirebaseListener();
       return;
     }
   } catch(e) {
@@ -826,18 +956,26 @@ async function loadData(){
   data = defaultData();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // Firebaseにデータを同期
+    await saveDataToFirebase(data);
+    // Firebaseリスナーを設定
+    setupFirebaseListener();
   } catch(e) {}
 }
 
 async function saveData(){
   if (!data) return;
+  
+  // ローカルストレージに保存
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     localStorage.setItem(STORAGE_KEY + '_backup', JSON.stringify(data));
   } catch(e) {
-    showToast('保存に失敗しました');
-    console.error('保存エラー:', e);
+    console.warn('localStorage保存エラー:', e);
   }
+  
+  // Firebaseに保存
+  await saveDataToFirebase(data);
 }
 
 function showToast(msg){
