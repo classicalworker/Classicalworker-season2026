@@ -1,45 +1,36 @@
-name: Deploy to GitHub Pages
+name: 配信ステータス自動更新
 
 on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
+  schedule:
+    # 10分おきに実行(UTC基準のcron)。GitHub側の都合で数分遅延することがあります。
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
+  group: "live-status"
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  update-live-status:
     runs-on: ubuntu-latest
     steps:
       - name: リポジトリを取得
         uses: actions/checkout@v4
 
-      - name: firebase-config.js にAPIキーを注入
-        # ここでのみ、リポジトリの Secrets からAPIキーを読み込み
-        # プレースホルダを実際の値に置き換える。
-        # 置き換え後のファイルはビルド成果物 (Pages) にのみ含まれ、
-        # main ブランチのソースコードには生の値はコミットされない。
-        env:
-          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
-        run: |
-          if [ -z "$FIREBASE_API_KEY" ]; then
-            echo "::error::Secrets に FIREBASE_API_KEY が設定されていません。リポジトリの Settings > Secrets and variables > Actions から追加してください。"
-            exit 1
-          fi
-          sed -i "s|__FIREBASE_API_KEY__|${FIREBASE_API_KEY}|g" js/firebase-config.js
-
-      - name: Pages用に成果物をアップロード
-        uses: actions/upload-pages-artifact@v3
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v4
         with:
-          path: .
+          node-version: "20"
 
-      - name: GitHub Pagesへデプロイ
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: 依存パッケージをインストール
+        run: npm install --no-audit --no-fund
+
+      - name: 配信ステータスを更新
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+        run: node scripts/update-live-status.mjs
