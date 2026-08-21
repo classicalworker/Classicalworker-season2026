@@ -1,0 +1,45 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: firebase-config.js にAPIキーを注入
+        # ここでのみ、リポジトリの Secrets からAPIキーを読み込み
+        # プレースホルダを実際の値に置き換える。
+        # 置き換え後のファイルはビルド成果物 (Pages) にのみ含まれ、
+        # main ブランチのソースコードには生の値はコミットされない。
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+        run: |
+          if [ -z "$FIREBASE_API_KEY" ]; then
+            echo "::error::Secrets に FIREBASE_API_KEY が設定されていません。リポジトリの Settings > Secrets and variables > Actions から追加してください。"
+            exit 1
+          fi
+          sed -i "s|__FIREBASE_API_KEY__|${FIREBASE_API_KEY}|g" js/firebase-config.js
+
+      - name: Pages用に成果物をアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: GitHub Pagesへデプロイ
+        id: deployment
+        uses: actions/deploy-pages@v4
