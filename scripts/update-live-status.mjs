@@ -164,21 +164,49 @@ async function checkYoutubeOne(t) {
       /BADGE_STYLE_TYPE_LIVE_NOW/.test(html);
 
     let title = '';
-    const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"/);
-    if (titleMatch) {
-      title = titleMatch[1]
+    // 1) 最も確実: ページ内に埋め込まれた videoDetails.title (JSON) から取得
+    const videoDetailsMatch = html.match(/"videoDetails":\{"videoId":"[^"]*","title":"((?:[^"\\]|\\.)*)"/);
+    if (videoDetailsMatch) {
+      try {
+        title = JSON.parse(`"${videoDetailsMatch[1]}"`);
+      } catch (e) { /* 解析失敗時は他の方法にフォールバック */ }
+    }
+    // 2) og:title (属性の順序違いにも対応)
+    if (!title) {
+      const ogMatch =
+        html.match(/<meta property="og:title" content="([^"]*)"/) ||
+        html.match(/<meta content="([^"]*)" property="og:title"/);
+      if (ogMatch) title = ogMatch[1];
+    }
+    // 3) <title>タグ (末尾の " - YouTube" を除去)
+    if (!title) {
+      const titleTagMatch = html.match(/<title>([^<]*)<\/title>/);
+      if (titleTagMatch) title = titleTagMatch[1].replace(/\s*-\s*YouTube\s*$/, '');
+    }
+    if (title) {
+      title = title
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&');
+        .replace(/&amp;/g, '&')
+        .trim();
     }
 
+    // URLは動画ID(videoId)から直接組み立てるのが最も確実。
+    // canonicalタグやres.urlはページ構造の変化やリダイレクト有無で当てにならない場合がある。
     let url = liveUrl;
-    const canonicalMatch = html.match(/<link rel="canonical" href="([^"]*)"/);
-    if (canonicalMatch) url = canonicalMatch[1];
+    const videoIdMatch = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (videoIdMatch) {
+      url = `https://www.youtube.com/watch?v=${videoIdMatch[1]}`;
+    } else if (/\/watch\?/.test(res.url)) {
+      url = res.url;
+    } else {
+      const canonicalMatch = html.match(/<link rel="canonical" href="([^"]*)"/);
+      if (canonicalMatch) url = canonicalMatch[1];
+    }
 
     // 診断用: 実際にどのURLへ着地し(res.url)、動画ページ(/watch)に到達できたかどうかも出しておく
     console.log(
-      `YouTube(${t.name}): isLive=${isLive} title="${title}" fetchUrl=${liveUrl} finalUrl=${res.url} landedOnWatch=${/\/watch\?/.test(res.url)}`
+      `YouTube(${t.name}): isLive=${isLive} title="${title}" resolvedUrl=${url} fetchUrl=${liveUrl} finalUrl=${res.url}`
     );
     return { name: t.name, platform: 'youtube', isLive, title, url };
   } catch (e) {
