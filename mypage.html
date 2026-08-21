@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classical Worker's Lab | マイページ</title>
+<meta name="description" content="クラシカルワーカー メンバーサイト。対戦成績・ランキング・目標管理。">
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<!-- スタイルシート -->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="mypage">
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Classical worker SEASON 2026</div>
+    <h1>Classical Worker's Lab</h1>
+    <div class="sub">クラシカルワーカー　メンバーサイト</div>
+  </header>
+
+  <div class="tabs">
+    <a class="tab" href="index.html">🏠 TOP</a>
+    <a class="tab" href="schedule.html">📅 予定</a>
+    <a class="tab" href="goals.html">🎯 目標</a>
+    <a class="tab" href="ranking.html">🏆 ランキング</a>
+    <a class="tab" href="members.html">👥 メンバー</a>
+    <a class="tab active" href="mypage.html">✏️ マイページ</a>
+  </div>
+
+  <div id="view-mypage"></div>
+
+  <div class="footer-note"><br>
+  <button onclick="resetAll()">全データをリセット</button></div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div class="loading-label">保存中...</div>
+  </div>
+</div>
+
+<!-- Firebase設定(環境ごとに差し替え可能) -->
+<script src="js/firebase-config.js"></script>
+<!-- 全ページ共通のロジック(データ読み書き・共通UI) -->
+<script src="js/core.js"></script>
+<!-- このページ専用のロジック -->
+<script src="js/mypage.js"></script>
+</body>
+</html>

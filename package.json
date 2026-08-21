@@ -1,0 +1,12 @@
+{
+  "name": "classical-worker-lab-live-status",
+  "private": true,
+  "type": "module",
+  "description": "配信ステータス自動更新スクリプト(GitHub Actionsから実行、サイト本体の公開には無関係)",
+  "scripts": {
+    "update-live-status": "node scripts/update-live-status.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}

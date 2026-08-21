@@ -1,0 +1,16 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "classical_worker_data": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "live_status": {
+      ".read": "auth != null",
+      ".write": false
+    }
+  }
+}
