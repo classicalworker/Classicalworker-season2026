@@ -123,7 +123,7 @@ function renderMyPageWithPlayer(){
       <input type="number" id="max-mr-input" value="${escapeHtml(p.maxMR||'')}" placeholder="例:1800">
 
       <label>ユーザーコード</label>
-      <input type="text" id="user-code-input" value="${escapeHtml(p.userCode||'')}" placeholder="例:1234567890">
+      <input type="text" id="user-code-input" value="${escapeHtml(p.userCode||'')}" placeholder="例:SW-1234-5678-9012">
 
       <label>使用デバイス</label>
       <div class="choice-group" style="flex-wrap:wrap">

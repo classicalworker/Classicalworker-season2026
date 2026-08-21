@@ -101,10 +101,13 @@ function topLoadOnAirTitles(){
       const el = document.getElementById(`onair-title-${idx}`);
       if(!el) return;
       if(title){
-        el.textContent = title;
+        el.textContent = truncateZenkaku(title, 10);
+        el.title = title;
         el.className = 'onair-item-stream-title';
       } else {
-        el.textContent = entry.title || '配信タイトルを取得できませんでした';
+        const fallback = entry.title || '配信タイトルを取得できませんでした';
+        el.textContent = truncateZenkaku(fallback, 10);
+        el.title = fallback;
         el.className = 'onair-item-stream-title' + (entry.title ? '' : ' onair-item-stream-title-empty');
       }
     });
@@ -132,7 +135,7 @@ function topOnAirBannerHtml(){
       : platform === 'youtube'
         ? 'onair-item-stream-title onair-item-stream-title-loading'
         : 'onair-item-stream-title' + (entry.title ? '' : ' onair-item-stream-title-empty');
-    const titleHtml = `<span class="${initialCls}" id="onair-title-${idx}">${escapeHtml(initialTitle)}</span>`;
+    const titleHtml = `<span class="${initialCls}" id="onair-title-${idx}" title="${escapeHtml(initialTitle)}">${escapeHtml(truncateZenkaku(initialTitle, 10))}</span>`;
     const linkHtml = isSafeHttpUrl(url)
       ? `<a class="onair-item-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">見る</a>`
       : '';

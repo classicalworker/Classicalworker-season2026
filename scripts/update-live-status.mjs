@@ -83,37 +83,88 @@ async function main() {
 }
 
 // ---- YouTube: /channel/{ID}/live をサーバー側から取得して判定(APIキー不要) ----
-async function checkYoutubeLive(targets) {
+
+const YOUTUBE_FETCH_TIMEOUT_MS = 10_000; // 1件あたりの上限。これが無いとYouTube側の応答待ちで
+                                          // ジョブ全体が数十分単位で詰まる原因になっていた。
+const YOUTUBE_CONCURRENCY = 6;           // 直列実行(1件ずつ)をやめて並列化し、全体時間を短縮する。
+
+// タイムアウト付きfetch。指定時間内にレスポンスが無ければ中断してnullを返す。
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 配列を指定した並列数のチャンクに分けて処理する簡易ワーカープール
+async function runWithConcurrency(items, limit, worker) {
   const results = [];
-  for (const t of targets) {
-    try {
-      const res = await fetch(`https://www.youtube.com/channel/${encodeURIComponent(t.channelId)}/live`, {
-        redirect: 'follow',
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ClassicalWorkerLabBot/1.0)' },
-      });
-      const html = await res.text();
-
-      const isLive = /"isLiveNow":\s*true/.test(html) || /itemprop="isLiveBroadcast"\s+content="True"/i.test(html);
-
-      let title = '';
-      const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"/);
-      if (titleMatch) {
-        title = titleMatch[1]
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/&amp;/g, '&');
-      }
-
-      let url = `https://www.youtube.com/channel/${t.channelId}/live`;
-      const canonicalMatch = html.match(/<link rel="canonical" href="([^"]*)"/);
-      if (canonicalMatch) url = canonicalMatch[1];
-
-      results.push({ name: t.name, platform: 'youtube', isLive, title, url });
-    } catch (e) {
-      console.warn(`YouTubeチェック失敗(${t.name}): ${e.message}`);
+  let index = 0;
+  async function runNext() {
+    while (index < items.length) {
+      const current = items[index++];
+      results.push(await worker(current));
     }
   }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => runNext());
+  await Promise.all(workers);
   return results;
+}
+
+async function checkYoutubeOne(t) {
+  try {
+    const res = await fetchWithTimeout(
+      `https://www.youtube.com/channel/${encodeURIComponent(t.channelId)}/live`,
+      {
+        redirect: 'follow',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ClassicalWorkerLabBot/1.0)',
+          'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8',
+          // 地域によってはCookie同意ページにリダイレクトされ、配信状況が全く読み取れなくなるため
+          // あらかじめ同意済み状態を送って回避する。
+          Cookie: 'CONSENT=YES+1; SOCS=CAI',
+        },
+      },
+      YOUTUBE_FETCH_TIMEOUT_MS
+    );
+
+    if (!res.ok) {
+      console.warn(`YouTube取得失敗(${t.name}): HTTP ${res.status}`);
+      return null;
+    }
+
+    const html = await res.text();
+
+    const isLive = /"isLiveNow":\s*true/.test(html) || /itemprop="isLiveBroadcast"\s+content="True"/i.test(html);
+
+    let title = '';
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"/);
+    if (titleMatch) {
+      title = titleMatch[1]
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&');
+    }
+
+    let url = `https://www.youtube.com/channel/${t.channelId}/live`;
+    const canonicalMatch = html.match(/<link rel="canonical" href="([^"]*)"/);
+    if (canonicalMatch) url = canonicalMatch[1];
+
+    console.log(`YouTube(${t.name}): isLive=${isLive} title="${title}"`);
+    return { name: t.name, platform: 'youtube', isLive, title, url };
+  } catch (e) {
+    const reason = e.name === 'AbortError' ? `タイムアウト(${YOUTUBE_FETCH_TIMEOUT_MS}ms)` : e.message;
+    console.warn(`YouTubeチェック失敗(${t.name}): ${reason}`);
+    return null;
+  }
+}
+
+async function checkYoutubeLive(targets) {
+  const results = await runWithConcurrency(targets, YOUTUBE_CONCURRENCY, checkYoutubeOne);
+  return results.filter(Boolean);
 }
 
 // ---- Twitch: 公式Helix APIで一括取得(Client Credentials認証) ----

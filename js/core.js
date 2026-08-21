@@ -467,6 +467,36 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// 全角文字は2、半角文字は1としてカウントし、指定の全角文字数を超えたら「…」を付けて切り詰める
+// (例: truncateZenkaku(str, 10) は全角10文字分まで表示)
+function truncateZenkaku(str, maxZenkaku){
+  if(!str) return '';
+  const s = String(str);
+  const maxWidth = maxZenkaku * 2;
+  let width = 0;
+  let result = '';
+  for(const ch of Array.from(s)){
+    const code = ch.codePointAt(0);
+    const isWide = (
+      (code >= 0x1100 && code <= 0x115F) ||
+      (code >= 0x2E80 && code <= 0xA4CF) ||
+      (code >= 0xAC00 && code <= 0xD7A3) ||
+      (code >= 0xF900 && code <= 0xFAFF) ||
+      (code >= 0xFF00 && code <= 0xFF60) ||
+      (code >= 0xFFE0 && code <= 0xFFE6) ||
+      (code >= 0x20000 && code <= 0x3FFFD)
+    );
+    const w = isWide ? 2 : 1;
+    if(width + w > maxWidth){
+      result += '…';
+      return result;
+    }
+    width += w;
+    result += ch;
+  }
+  return result;
+}
+
 // href等に埋め込む前に http/https のURLかどうかを確認する(javascript: 等の埋め込み防止)
 function isSafeHttpUrl(url){
   if(!url) return false;
