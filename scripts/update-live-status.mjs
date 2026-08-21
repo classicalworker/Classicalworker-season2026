@@ -114,10 +114,29 @@ async function runWithConcurrency(items, limit, worker) {
   return results;
 }
 
+// UCxxxx形式のチャンネルIDか、@ハンドル形式かを判定してYouTube上のURLを組み立てる。
+// 万一データに古い壊れた値(URLがそのまま入っている等)が残っていても、可能な範囲で救済する。
+function buildYoutubeLiveUrl(channelId) {
+  const trimmed = String(channelId).trim();
+  if (/^UC[0-9A-Za-z_-]{20,}$/.test(trimmed)) {
+    return `https://www.youtube.com/channel/${trimmed}/live`;
+  }
+  const handleMatch = trimmed.match(/(@[0-9A-Za-z_.-]{3,})/);
+  if (handleMatch) {
+    return `https://www.youtube.com/${handleMatch[1]}/live`;
+  }
+  // 何かのURLがそのまま入っている場合は、末尾に/liveを付けて試す
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\/+$/, '').replace(/\/(live|videos|streams|featured)$/i, '') + '/live';
+  }
+  return `https://www.youtube.com/channel/${encodeURIComponent(trimmed)}/live`;
+}
+
 async function checkYoutubeOne(t) {
+  const liveUrl = buildYoutubeLiveUrl(t.channelId);
   try {
     const res = await fetchWithTimeout(
-      `https://www.youtube.com/channel/${encodeURIComponent(t.channelId)}/live`,
+      liveUrl,
       {
         redirect: 'follow',
         headers: {
@@ -132,13 +151,17 @@ async function checkYoutubeOne(t) {
     );
 
     if (!res.ok) {
-      console.warn(`YouTube取得失敗(${t.name}): HTTP ${res.status}`);
+      console.warn(`YouTube取得失敗(${t.name}): HTTP ${res.status} url=${liveUrl}`);
       return null;
     }
 
     const html = await res.text();
 
-    const isLive = /"isLiveNow":\s*true/.test(html) || /itemprop="isLiveBroadcast"\s+content="True"/i.test(html);
+    const isLive =
+      /"isLiveNow":\s*true/.test(html) ||
+      /itemprop="isLiveBroadcast"\s+content="True"/i.test(html) ||
+      /"isLive":\s*true/.test(html) ||
+      /BADGE_STYLE_TYPE_LIVE_NOW/.test(html);
 
     let title = '';
     const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"/);
@@ -149,15 +172,18 @@ async function checkYoutubeOne(t) {
         .replace(/&amp;/g, '&');
     }
 
-    let url = `https://www.youtube.com/channel/${t.channelId}/live`;
+    let url = liveUrl;
     const canonicalMatch = html.match(/<link rel="canonical" href="([^"]*)"/);
     if (canonicalMatch) url = canonicalMatch[1];
 
-    console.log(`YouTube(${t.name}): isLive=${isLive} title="${title}"`);
+    // 診断用: 実際にどのURLへ着地し(res.url)、動画ページ(/watch)に到達できたかどうかも出しておく
+    console.log(
+      `YouTube(${t.name}): isLive=${isLive} title="${title}" fetchUrl=${liveUrl} finalUrl=${res.url} landedOnWatch=${/\/watch\?/.test(res.url)}`
+    );
     return { name: t.name, platform: 'youtube', isLive, title, url };
   } catch (e) {
     const reason = e.name === 'AbortError' ? `タイムアウト(${YOUTUBE_FETCH_TIMEOUT_MS}ms)` : e.message;
-    console.warn(`YouTubeチェック失敗(${t.name}): ${reason}`);
+    console.warn(`YouTubeチェック失敗(${t.name}): ${reason} url=${liveUrl}`);
     return null;
   }
 }

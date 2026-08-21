@@ -146,7 +146,7 @@ function renderMyPageWithPlayer(){
       <div class="attend-toggle-hint">下を登録しておくと、配信を始めるだけで自動的にTOP画面へ表示されます(5〜10分おきに自動チェックするため、反映まで少し時間がかかります)。URLを毎回貼り直す必要はありません。</div>
 
       <label>YouTubeチャンネルID(任意)</label>
-      <input type="text" id="youtube-channel-input" value="${escapeHtml(p.youtubeChannelId||'')}" placeholder="例:UCxxxxxxxxxxxxxxxxxxxxxx (チャンネルURLやYouTube Studioの「詳細設定」で確認できます)">
+      <input type="text" id="youtube-channel-input" value="${escapeHtml(p.youtubeChannelId||'')}" placeholder="例:UCxxxxxxxxxxxxxxxxxxxxxx または @ハンドル名 (チャンネルURLをそのまま貼り付けてもOK)">
 
       <label>Twitchログイン名(任意)</label>
       <input type="text" id="twitch-login-input" value="${escapeHtml(p.twitchLogin||'')}" placeholder="例:あなたのTwitchチャンネル名(twitch.tv/の後ろの部分)">
@@ -284,10 +284,15 @@ function handleIconUpload(input){
 }
 
 // チャンネルIDの代わりにURLをそのまま貼られた場合でも、そこからIDだけを抜き出す
+// 従来型の "UCxxxxxxxx" IDに加えて、現在主流の "@ハンドル名" 形式にも対応する。
 function parseYoutubeChannelInput(raw){
   if (!raw) return '';
-  const m = raw.match(/(UC[0-9A-Za-z_-]{20,})/);
-  return m ? m[1] : raw;
+  const ucMatch = raw.match(/(UC[0-9A-Za-z_-]{20,})/);
+  if (ucMatch) return ucMatch[1];
+  // 例: https://www.youtube.com/@kitaro_game, https://youtube.com/@kitaro_game/videos, @kitaro_game
+  const handleMatch = raw.match(/(?:youtube\.com\/)?(@[0-9A-Za-z_.-]{3,})/i);
+  if (handleMatch) return handleMatch[1];
+  return raw;
 }
 
 // twitch.tv/xxxx のようなURLが貼られた場合でも、ログイン名だけを抜き出す
