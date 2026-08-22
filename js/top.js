@@ -76,6 +76,7 @@ function topGetLiveEntries(){
         url: auto.url,
         title: auto.title || '',
         platform: auto.platform || topDetectPlatform(auto.url),
+        thumbnail: auto.thumbnail || '',
         auto: true
       });
     } else if (p.isLive && p.streamUrl) {
@@ -84,6 +85,7 @@ function topGetLiveEntries(){
         url: p.streamUrl,
         title: p.streamTitle || '',
         platform: topDetectPlatform(p.streamUrl),
+        thumbnail: '',
         auto: false
       });
     }
@@ -120,7 +122,8 @@ function topOnAirBannerHtml(){
 
   const itemsHtml = entries.map((entry, idx)=>{
     const { name: n, url, platform, auto } = entry;
-    const thumb = topExtractThumbnail(url);
+    // 自動検知分はyt-dlpが返した実際のサムネイルURLを優先し、無ければURLから推測する
+    const thumb = entry.thumbnail || topExtractThumbnail(url);
     const thumbHtml = thumb
       ? `<img class="onair-item-thumb" src="${thumb}" alt="" loading="lazy" onerror="topThumbFallback(this)">`
       : `<div class="onair-item-thumb onair-item-thumb-ph">📡</div>`;

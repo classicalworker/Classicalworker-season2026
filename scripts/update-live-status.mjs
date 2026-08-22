@@ -1,7 +1,10 @@
 // ===== 配信ステータス自動更新スクリプト =====
 // GitHub Actions(.github/workflows/live-status.yml)から定期実行される。
-// - YouTube: 公式APIキー不要。/channel/{ID}/live ページをサーバー側から取得し、
-//   ライブ配信中かどうか・タイトルをHTMLから読み取る(CORSはブラウザのみの制約なので問題なし)。
+// - YouTube: yt-dlp(要ワークフロー側でインストール)を使ってライブ配信の有無・タイトル・
+//   サムネイルを取得する。以前は自前でHTMLを正規表現パースしていたが、YouTube側のページ構造の
+//   揺れ(コンセント確認・フォールバック表示など)により無関係な動画を誤って拾う不具合が
+//   繰り返し発生したため、YouTube配信検出用に広く使われ継続的にメンテナンスされているOSSの
+//   yt-dlpに置き換えた。
 // - Twitch: 公式Helix APIを使用(Client ID/Secretが必要)。認証情報はGitHub Secretsに
 //   保存し、この実行環境の外には一切出さない。
 // 結果はFirebase Realtime Databaseの live_status ノードにのみ書き込む(サービスアカウント
@@ -10,7 +13,10 @@
 
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getDatabase } from 'firebase-admin/database';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
+const execFileAsync = promisify(execFile);
 const DATABASE_URL = 'https://classical-workers-lab-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 function requireEnv(name) {
@@ -65,7 +71,7 @@ async function main() {
   // チェック対象だったメンバーは、オフラインの場合も明示的にfalseで書き込む
   // (そうしないと「配信終了」後も古いisLive:trueがずっと残ってしまう)
   [...youtubeTargets, ...twitchTargets].forEach((t) => {
-    liveStatus[t.name] = { isLive: false, title: '', url: '', platform: '', updatedAt: now };
+    liveStatus[t.name] = { isLive: false, title: '', url: '', platform: '', thumbnail: '', updatedAt: now };
   });
   [...youtubeResults, ...twitchResults].forEach((r) => {
     liveStatus[r.name] = {
@@ -73,6 +79,7 @@ async function main() {
       isLive: r.isLive,
       title: r.title || '',
       url: r.url || '',
+      thumbnail: r.thumbnail || '',
       updatedAt: now,
     };
   });
@@ -82,22 +89,10 @@ async function main() {
   process.exit(0);
 }
 
-// ---- YouTube: /channel/{ID}/live をサーバー側から取得して判定(APIキー不要) ----
+// ---- YouTube: yt-dlpでライブ配信の有無・タイトル・サムネイルを取得 ----
 
-const YOUTUBE_FETCH_TIMEOUT_MS = 10_000; // 1件あたりの上限。これが無いとYouTube側の応答待ちで
-                                          // ジョブ全体が数十分単位で詰まる原因になっていた。
-const YOUTUBE_CONCURRENCY = 6;           // 直列実行(1件ずつ)をやめて並列化し、全体時間を短縮する。
-
-// タイムアウト付きfetch。指定時間内にレスポンスが無ければ中断してnullを返す。
-async function fetchWithTimeout(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const YOUTUBE_YTDLP_TIMEOUT_MS = 20_000; // yt-dlp起動+解析の上限。これが無いと応答待ちでジョブ全体が詰まる。
+const YOUTUBE_CONCURRENCY = 4;           // プロセス起動を伴うため、HTML直接取得の時より並列数はやや控えめにする。
 
 // 配列を指定した並列数のチャンクに分けて処理する簡易ワーカープール
 async function runWithConcurrency(items, limit, worker) {
@@ -135,118 +130,55 @@ function buildYoutubeLiveUrl(channelId) {
 async function checkYoutubeOne(t) {
   const liveUrl = buildYoutubeLiveUrl(t.channelId);
   try {
-    const res = await fetchWithTimeout(
-      liveUrl,
-      {
-        redirect: 'follow',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ClassicalWorkerLabBot/1.0)',
-          'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8',
-          // 地域によってはCookie同意ページにリダイレクトされ、配信状況が全く読み取れなくなるため
-          // あらかじめ同意済み状態を送って回避する。
-          Cookie: 'CONSENT=YES+1; SOCS=CAI',
-        },
-      },
-      YOUTUBE_FETCH_TIMEOUT_MS
+    const { stdout } = await execFileAsync(
+      'yt-dlp',
+      [
+        '--skip-download',
+        '--no-warnings',
+        '--no-playlist',
+        '--socket-timeout', '10',
+        '--dump-single-json',
+        liveUrl,
+      ],
+      { timeout: YOUTUBE_YTDLP_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 }
     );
 
-    if (!res.ok) {
-      console.warn(`YouTube取得失敗(${t.name}): HTTP ${res.status} url=${liveUrl}`);
-      return null;
+    const info = JSON.parse(stdout);
+    let isLive = info.is_live === true || info.live_status === 'is_live';
+
+    // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する。
+    // (yt-dlpは基本的に対象チャンネルの配信を正しく解決するが、念のための二重チェック)
+    if (isLive && info.channel_id && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && info.channel_id !== t.channelId) {
+      console.warn(
+        `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${info.channel_id})`
+      );
+      isLive = false;
     }
 
-    const html = await res.text();
+    const title = isLive ? (info.title || '') : '';
+    const url = isLive ? (info.webpage_url || `https://www.youtube.com/watch?v=${info.id}`) : '';
+    const thumbnail = isLive ? (info.thumbnail || '') : '';
 
-    // videoDetails オブジェクトの中身だけを見て isLive / videoId / title を同時に判定する。
-    // ページ全体を正規表現で走査すると、配信中でなくても関連動画欄などに表示された
-    // 「別の配信者のライブ配信」を誤って拾ってしまうことがあったため、
-    // 必ず対象チャンネルの動画自体を表す videoDetails ブロックの範囲内だけを見る。
-    let isLive = false;
-    let title = '';
-    let primaryVideoId = '';
-
-    const vdIdx = html.indexOf('"videoDetails":{');
-    if (vdIdx !== -1) {
-      // videoDetailsオブジェクトは通常この範囲に収まる(念のため広めに取る)
-      const chunk = html.slice(vdIdx, vdIdx + 2000);
-      const chunkVideoIdMatch = chunk.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-      const chunkTitleMatch = chunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
-      const chunkChannelIdMatch = chunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
-      if (chunkVideoIdMatch) primaryVideoId = chunkVideoIdMatch[1];
-      if (chunkTitleMatch) {
-        try {
-          title = JSON.parse(`"${chunkTitleMatch[1]}"`);
-        } catch (e) { /* noop */ }
-      }
-      isLive = /"isLive":\s*true/.test(chunk);
-
-      // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する。
-      // (別チャンネルの動画へ迷い込んだ場合の誤表示を防ぐ)
-      if (isLive && chunkChannelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId)) {
-        if (chunkChannelIdMatch[1] !== t.channelId) {
-          console.warn(
-            `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${chunkChannelIdMatch[1]})`
-          );
-          isLive = false;
-          title = '';
-          primaryVideoId = '';
-        }
-      }
-    } else {
-      // videoDetailsが見つからない(ページ構造が想定外)場合のみ、ページ全体からのフォールバック判定
-      isLive =
-        /"isLiveNow":\s*true/.test(html) ||
-        /itemprop="isLiveBroadcast"\s+content="True"/i.test(html) ||
-        /BADGE_STYLE_TYPE_LIVE_NOW/.test(html);
-    }
-
-    // 2) og:title (属性の順序違いにも対応)
-    if (!title) {
-      const ogMatch =
-        html.match(/<meta property="og:title" content="([^"]*)"/) ||
-        html.match(/<meta content="([^"]*)" property="og:title"/);
-      if (ogMatch) title = ogMatch[1];
-    }
-    // 3) <title>タグ (末尾の " - YouTube" を除去)
-    if (!title) {
-      const titleTagMatch = html.match(/<title>([^<]*)<\/title>/);
-      if (titleTagMatch) title = titleTagMatch[1].replace(/\s*-\s*YouTube\s*$/, '');
-    }
-    if (title) {
-      title = title
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&')
-        .trim();
-    }
-
-    // URLもタイトルと同じ videoDetails.videoId から組み立てる(取得元を必ず一致させる)。
-    // videoDetailsから取れなかった場合のみ、res.url→canonicalタグの順にフォールバックする。
-    let url = liveUrl;
-    if (primaryVideoId) {
-      url = `https://www.youtube.com/watch?v=${primaryVideoId}`;
-    } else if (/\/watch\?/.test(res.url)) {
-      url = res.url;
-    } else {
-      const canonicalMatch = html.match(/<link rel="canonical" href="([^"]*)"/);
-      if (canonicalMatch) url = canonicalMatch[1];
-    }
-
-    // 診断用: 実際にどのURLへ着地し(res.url)、動画ページ(/watch)に到達できたかどうかも出しておく
-    console.log(
-      `YouTube(${t.name}): isLive=${isLive} title="${title}" resolvedUrl=${url} fetchUrl=${liveUrl} finalUrl=${res.url}`
-    );
-    return { name: t.name, platform: 'youtube', isLive, title, url };
+    console.log(`YouTube(${t.name}): isLive=${isLive} title="${title}" url=${url}`);
+    return { name: t.name, platform: 'youtube', isLive, title, url, thumbnail };
   } catch (e) {
-    const reason = e.name === 'AbortError' ? `タイムアウト(${YOUTUBE_FETCH_TIMEOUT_MS}ms)` : e.message;
-    console.warn(`YouTubeチェック失敗(${t.name}): ${reason} url=${liveUrl}`);
-    return null;
+    // 配信していない場合、yt-dlpはエラー終了する(異常ではなく正常な「非配信中」の応答)。
+    const stderrText = (e.stderr || e.message || '').toString();
+    const notLive = /not currently live|does not have a live stream|no video formats|Premieres in|This live event will begin|is not currently live/i.test(
+      stderrText
+    );
+    if (notLive) {
+      console.log(`YouTube(${t.name}): isLive=false (配信なし)`);
+    } else {
+      const reason = e.killed ? `タイムアウト(${YOUTUBE_YTDLP_TIMEOUT_MS}ms)` : stderrText.slice(0, 300) || e.message;
+      console.warn(`YouTubeチェック失敗(${t.name}): ${reason} url=${liveUrl}`);
+    }
+    return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
   }
 }
 
 async function checkYoutubeLive(targets) {
-  const results = await runWithConcurrency(targets, YOUTUBE_CONCURRENCY, checkYoutubeOne);
-  return results.filter(Boolean);
+  return runWithConcurrency(targets, YOUTUBE_CONCURRENCY, checkYoutubeOne);
 }
 
 // ---- Twitch: 公式Helix APIで一括取得(Client Credentials認証) ----
@@ -303,6 +235,7 @@ async function checkTwitchLive(targets, clientId, clientSecret) {
         isLive: !!stream,
         title: stream ? stream.title : '',
         url: `https://www.twitch.tv/${t.login}`,
+        thumbnail: '', // Twitchはクライアント側でプレビュー画像URLを組み立てるため空のままでよい
       });
     });
   }
