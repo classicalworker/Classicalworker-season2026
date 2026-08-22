@@ -31,7 +31,9 @@ jobs:
       - name: yt-dlpをインストール
         # YouTubeのライブ配信検出に使用。継続的にメンテナンスされているOSSを使うことで、
         # 自前のHTML正規表現パースで起きていた誤検出(無関係な動画が混ざる等)を避ける。
-        run: pip install --no-cache-dir -U yt-dlp
+        run: |
+          pip install --no-cache-dir -U yt-dlp
+          yt-dlp --version
 
       - name: 配信ステータスを更新
         env:
