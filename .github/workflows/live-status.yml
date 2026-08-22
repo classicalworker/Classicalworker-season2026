@@ -28,13 +28,6 @@ jobs:
       - name: 依存パッケージをインストール
         run: npm install --no-audit --no-fund
 
-      - name: yt-dlpをインストール
-        # YouTubeのライブ配信検出に使用。継続的にメンテナンスされているOSSを使うことで、
-        # 自前のHTML正規表現パースで起きていた誤検出(無関係な動画が混ざる等)を避ける。
-        run: |
-          pip install --no-cache-dir -U yt-dlp
-          yt-dlp --version
-
       - name: 配信ステータスを更新
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
