@@ -157,20 +157,49 @@ async function checkYoutubeOne(t) {
 
     const html = await res.text();
 
-    const isLive =
-      /"isLiveNow":\s*true/.test(html) ||
-      /itemprop="isLiveBroadcast"\s+content="True"/i.test(html) ||
-      /"isLive":\s*true/.test(html) ||
-      /BADGE_STYLE_TYPE_LIVE_NOW/.test(html);
-
+    // videoDetails オブジェクトの中身だけを見て isLive / videoId / title を同時に判定する。
+    // ページ全体を正規表現で走査すると、配信中でなくても関連動画欄などに表示された
+    // 「別の配信者のライブ配信」を誤って拾ってしまうことがあったため、
+    // 必ず対象チャンネルの動画自体を表す videoDetails ブロックの範囲内だけを見る。
+    let isLive = false;
     let title = '';
-    // 1) 最も確実: ページ内に埋め込まれた videoDetails.title (JSON) から取得
-    const videoDetailsMatch = html.match(/"videoDetails":\{"videoId":"[^"]*","title":"((?:[^"\\]|\\.)*)"/);
-    if (videoDetailsMatch) {
-      try {
-        title = JSON.parse(`"${videoDetailsMatch[1]}"`);
-      } catch (e) { /* 解析失敗時は他の方法にフォールバック */ }
+    let primaryVideoId = '';
+
+    const vdIdx = html.indexOf('"videoDetails":{');
+    if (vdIdx !== -1) {
+      // videoDetailsオブジェクトは通常この範囲に収まる(念のため広めに取る)
+      const chunk = html.slice(vdIdx, vdIdx + 2000);
+      const chunkVideoIdMatch = chunk.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+      const chunkTitleMatch = chunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
+      const chunkChannelIdMatch = chunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
+      if (chunkVideoIdMatch) primaryVideoId = chunkVideoIdMatch[1];
+      if (chunkTitleMatch) {
+        try {
+          title = JSON.parse(`"${chunkTitleMatch[1]}"`);
+        } catch (e) { /* noop */ }
+      }
+      isLive = /"isLive":\s*true/.test(chunk);
+
+      // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する。
+      // (別チャンネルの動画へ迷い込んだ場合の誤表示を防ぐ)
+      if (isLive && chunkChannelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId)) {
+        if (chunkChannelIdMatch[1] !== t.channelId) {
+          console.warn(
+            `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${chunkChannelIdMatch[1]})`
+          );
+          isLive = false;
+          title = '';
+          primaryVideoId = '';
+        }
+      }
+    } else {
+      // videoDetailsが見つからない(ページ構造が想定外)場合のみ、ページ全体からのフォールバック判定
+      isLive =
+        /"isLiveNow":\s*true/.test(html) ||
+        /itemprop="isLiveBroadcast"\s+content="True"/i.test(html) ||
+        /BADGE_STYLE_TYPE_LIVE_NOW/.test(html);
     }
+
     // 2) og:title (属性の順序違いにも対応)
     if (!title) {
       const ogMatch =
@@ -191,12 +220,11 @@ async function checkYoutubeOne(t) {
         .trim();
     }
 
-    // URLは動画ID(videoId)から直接組み立てるのが最も確実。
-    // canonicalタグやres.urlはページ構造の変化やリダイレクト有無で当てにならない場合がある。
+    // URLもタイトルと同じ videoDetails.videoId から組み立てる(取得元を必ず一致させる)。
+    // videoDetailsから取れなかった場合のみ、res.url→canonicalタグの順にフォールバックする。
     let url = liveUrl;
-    const videoIdMatch = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-    if (videoIdMatch) {
-      url = `https://www.youtube.com/watch?v=${videoIdMatch[1]}`;
+    if (primaryVideoId) {
+      url = `https://www.youtube.com/watch?v=${primaryVideoId}`;
     } else if (/\/watch\?/.test(res.url)) {
       url = res.url;
     } else {
