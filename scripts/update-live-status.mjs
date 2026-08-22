@@ -137,6 +137,9 @@ async function checkYoutubeOne(t) {
         '--no-warnings',
         '--no-playlist',
         '--socket-timeout', '10',
+        // GitHub ActionsなどクラウドIPからのアクセスはYouTube側の「ボット確認」に
+        // 引っかかりやすいため、その確認を要求されにくいTVクライアント扱いで取得する。
+        '--extractor-args', 'youtube:player_client=tv',
         '--dump-single-json',
         liveUrl,
       ],
@@ -162,15 +165,16 @@ async function checkYoutubeOne(t) {
     console.log(`YouTube(${t.name}): isLive=${isLive} title="${title}" url=${url}`);
     return { name: t.name, platform: 'youtube', isLive, title, url, thumbnail };
   } catch (e) {
-    // 配信していない場合、yt-dlpはエラー終了する(異常ではなく正常な「非配信中」の応答)。
+    // 「配信なし」判定だった場合も、実際は取得自体に失敗している(ボット判定等)ケースを
+    // 見分けられるよう、常に生のエラー内容を短く出力しておく。
     const stderrText = (e.stderr || e.message || '').toString();
     const notLive = /not currently live|does not have a live stream|no video formats|Premieres in|This live event will begin|is not currently live/i.test(
       stderrText
     );
+    const reason = e.killed ? `タイムアウト(${YOUTUBE_YTDLP_TIMEOUT_MS}ms)` : stderrText.replace(/\s+/g, ' ').trim().slice(0, 300) || e.message;
     if (notLive) {
-      console.log(`YouTube(${t.name}): isLive=false (配信なし)`);
+      console.log(`YouTube(${t.name}): isLive=false (配信なしと判定) raw="${reason}"`);
     } else {
-      const reason = e.killed ? `タイムアウト(${YOUTUBE_YTDLP_TIMEOUT_MS}ms)` : stderrText.slice(0, 300) || e.message;
       console.warn(`YouTubeチェック失敗(${t.name}): ${reason} url=${liveUrl}`);
     }
     return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
