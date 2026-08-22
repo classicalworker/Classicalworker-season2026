@@ -139,12 +139,54 @@ function buildYoutubeLiveUrl(channelId) {
 
 const YOUTUBE_UA = 'Mozilla/5.0 (compatible; ClassicalWorkerLabBot/1.0)';
 
+// html中の指定した変数名(例: ytInitialPlayerResponse)に代入されているJSONオブジェクトを、
+// 波括弧の対応を正しく数えながら取り出してJSON.parseする。
+// これまでの「文字列の断片を正規表現で拾う」方式は、ページ内の別の場所にある
+// 無関係な断片(部分的なJSON片・関連動画の情報等)を誤って拾ってしまうことがあったため、
+// 実際のJSON構造として正確に切り出す方式に変更した。
+function extractJsonVar(html, varName) {
+  const nameIdx = html.indexOf(varName);
+  if (nameIdx === -1) return null;
+  const eqIdx = html.indexOf('=', nameIdx);
+  if (eqIdx === -1) return null;
+  const braceStart = html.indexOf('{', eqIdx);
+  if (braceStart === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = braceStart; i < html.length; i++) {
+    const ch = html[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        const jsonText = html.slice(braceStart, i + 1);
+        try {
+          return JSON.parse(jsonText);
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 async function checkYoutubeOne(t) {
   const liveUrl = buildYoutubeLiveUrl(t.channelId);
   try {
     // /channel(または@handle)/live はHTTPリダイレクトはされず、配信中かどうかに関わらず
-    // 同じURLのまま200が返る。配信中なら、その本文に埋め込まれたJSON(videoDetails)に
-    // 実際の動画ID・タイトル・isLiveフラグが入っているので、それを読み取って判定する。
+    // 同じURLのまま200が返る。配信中なら、その本文に埋め込まれた
+    // ytInitialPlayerResponse というJSONに実際の動画ID・タイトル・配信中フラグが入っているので、
+    // それを正規のJSONとして取り出して判定する。
     const res = await fetchWithTimeout(
       liveUrl,
       {
@@ -160,96 +202,49 @@ async function checkYoutubeOne(t) {
     }
 
     const html = await res.text();
-    const pmIdx = html.indexOf('"playerMicroformatRenderer":{');
+    const playerResponse = extractJsonVar(html, 'ytInitialPlayerResponse');
 
-    // 診断用: 実際に何が返ってきているかを必ずログに残す。
-    // (応答が想定より小さい/リダイレクトされている等、取得自体の問題を切り分けるため)
     console.log(
-      `YouTube(${t.name}): 診断 status=${res.status} finalUrl=${res.url} htmlLength=${html.length} hasPlayerMicroformat=${pmIdx !== -1} hasVideoDetails=${html.includes('"videoDetails":{')} hasYtInitialPlayerResponse=${html.includes('ytInitialPlayerResponse')} hasYtInitialData=${html.includes('ytInitialData')} hasConsentForm=${/consent\.youtube\.com|action="https:\/\/consent\.google\.com/.test(html)}`
+      `YouTube(${t.name}): 診断 status=${res.status} htmlLength=${html.length} playerResponse取得=${!!playerResponse}`
     );
 
-    // 配信中かどうかを示す "isLiveNow" は videoDetails ではなく
-    // playerMicroformatRenderer.liveBroadcastDetails の中に入っている。
-    // 動画ID・チャンネルID・タイトルもこの同じオブジェクトから同時に取得することで、
-    // 「別の配信者の動画情報が混ざる」ことなく必ず対象と一致する組み合わせになる。
-    let isLive = false;
-    let title = '';
-    let videoId = '';
-
-    if (pmIdx !== -1) {
-      const chunk = html.slice(pmIdx, pmIdx + 4000); // 念のため広めに取る
-      const videoIdMatch = chunk.match(/"externalVideoId":"([a-zA-Z0-9_-]{11})"/);
-      const channelIdMatch = chunk.match(/"externalChannelId":"(UC[0-9A-Za-z_-]{20,})"/);
-      const titleMatch = chunk.match(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"\}/);
-      if (videoIdMatch) videoId = videoIdMatch[1];
-      if (titleMatch) {
-        try {
-          title = JSON.parse(`"${titleMatch[1]}"`);
-        } catch (e) { /* noop */ }
-      }
-      isLive = /"isLiveNow":\s*true/.test(chunk);
-
-      // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する
-      if (isLive && channelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && channelIdMatch[1] !== t.channelId) {
-        console.warn(
-          `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${channelIdMatch[1]})`
-        );
-        isLive = false;
-      }
+    if (!playerResponse) {
+      console.log(`YouTube(${t.name}): isLive=false (ytInitialPlayerResponseを取得できませんでした) url=${liveUrl}`);
+      return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
     }
 
-    // playerMicroformatRendererから判定できなかった場合の保険として、
-    // videoDetails(こちらも「同一オブジェクト内」から動画ID・タイトル・isLiveを同時取得)も試す。
-    if (!isLive) {
-      const vdIdx = html.indexOf('"videoDetails":{');
-      if (vdIdx !== -1) {
-        const vdChunk = html.slice(vdIdx, vdIdx + 2000);
-        const vdVideoIdMatch = vdChunk.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-        const vdTitleMatch = vdChunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
-        const vdChannelIdMatch = vdChunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
-        const vdIsLive = /"isLive":\s*true/.test(vdChunk);
-        console.log(`YouTube(${t.name}): videoDetails診断 found=true isLive=${vdIsLive} videoId=${vdVideoIdMatch ? vdVideoIdMatch[1] : '(なし)'}`);
-        if (vdIsLive) {
-          isLive = true;
-          if (vdVideoIdMatch) videoId = vdVideoIdMatch[1];
-          if (vdTitleMatch) {
-            try {
-              title = JSON.parse(`"${vdTitleMatch[1]}"`);
-            } catch (e) { /* noop */ }
-          }
-          if (vdChannelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && vdChannelIdMatch[1] !== t.channelId) {
-            console.warn(
-              `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化(videoDetails) (期待=${t.channelId} 実際=${vdChannelIdMatch[1]})`
-            );
-            isLive = false;
-          }
-        }
-      } else {
-        console.log(`YouTube(${t.name}): videoDetails診断 found=false`);
-      }
-    }
+    const vd = playerResponse.videoDetails || {};
+    const liveDetails = playerResponse.microformat?.playerMicroformatRenderer?.liveBroadcastDetails;
 
-    // さらなる保険として、ページ全体に「配信中」を示す代表的なマーカー文字列が
-    // どれか存在するかどうかも診断ログに出しておく(構造自体が想定と違う場合の手がかり)
-    if (!isLive) {
-      const markers = {
-        isLiveNow: /"isLiveNow":\s*true/.test(html),
-        styleLive: /"style":\s*"LIVE"/.test(html),
-        badgeLiveNow: /BADGE_STYLE_TYPE_LIVE_NOW/.test(html),
-        liveBroadcastDetails: html.includes('"liveBroadcastDetails"'),
-      };
-      console.log(`YouTube(${t.name}): 全体マーカー診断 ${JSON.stringify(markers)}`);
-    }
+    // isLiveNow(配信中かどうかの正式なフラグ)が無ければ、videoDetails.isLiveも保険として見る。
+    // どちらも同じ playerResponse という「1つのJSON」から取得しているので、
+    // 動画ID・タイトル・配信中フラグが必ず同じ動画のものになる(取り違えが起きない)。
+    const isLive = liveDetails?.isLiveNow === true || vd.isLive === true;
+    const videoId = vd.videoId || '';
+    const title = vd.title || '';
+    const channelId = vd.channelId || '';
+
+    console.log(
+      `YouTube(${t.name}): videoDetails診断 videoId=${videoId || '(なし)'} isLive(vd)=${vd.isLive} isLiveNow(microformat)=${liveDetails?.isLiveNow} title="${title}"`
+    );
 
     if (!isLive) {
       console.log(`YouTube(${t.name}): isLive=false url=${liveUrl}`);
       return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
     }
 
+    // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する
+    if (channelId && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && channelId !== t.channelId) {
+      console.warn(
+        `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${channelId})`
+      );
+      return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
+    }
+
     const url = videoId ? `https://www.youtube.com/watch?v=${videoId}` : liveUrl;
+    let finalTitle = title;
 
     // サムネイルは公式のoEmbed(認証不要・埋め込みウィジェット用の軽量API)から取得する。
-    // タイトルはvideoDetailsから取れなかった場合のみoEmbedの値で補う。
     let thumbnail = '';
     try {
       const oembedRes = await fetchWithTimeout(
@@ -259,7 +254,7 @@ async function checkYoutubeOne(t) {
       );
       if (oembedRes.ok) {
         const info = await oembedRes.json();
-        if (!title) title = info.title || '';
+        if (!finalTitle) finalTitle = info.title || '';
         thumbnail = info.thumbnail_url || '';
       } else {
         console.warn(`YouTube(${t.name}): oEmbed取得失敗 HTTP ${oembedRes.status}`);
@@ -268,8 +263,8 @@ async function checkYoutubeOne(t) {
       console.warn(`YouTube(${t.name}): oEmbed取得失敗 ${e.message}`);
     }
 
-    console.log(`YouTube(${t.name}): isLive=true title="${title}" url=${url}`);
-    return { name: t.name, platform: 'youtube', isLive: true, title, url, thumbnail };
+    console.log(`YouTube(${t.name}): isLive=true title="${finalTitle}" url=${url}`);
+    return { name: t.name, platform: 'youtube', isLive: true, title: finalTitle, url, thumbnail };
   } catch (e) {
     const reason = e.name === 'AbortError' ? `タイムアウト(${YOUTUBE_FETCH_TIMEOUT_MS}ms)` : e.message;
     console.warn(`YouTubeチェック失敗(${t.name}): ${reason} url=${liveUrl}`);
