@@ -142,9 +142,9 @@ const YOUTUBE_UA = 'Mozilla/5.0 (compatible; ClassicalWorkerLabBot/1.0)';
 async function checkYoutubeOne(t) {
   const liveUrl = buildYoutubeLiveUrl(t.channelId);
   try {
-    // /channel(または@handle)/live は、配信中なら最終的に /watch?v=... へリダイレクトされる。
-    // 配信していなければチャンネルのトップページ等に留まる。この違いだけで判定するので、
-    // ページ本文を正規表現でパースする必要が無く、無関係な動画を誤って拾う心配もない。
+    // /channel(または@handle)/live はHTTPリダイレクトはされず、配信中かどうかに関わらず
+    // 同じURLのまま200が返る。配信中なら、その本文に埋め込まれたJSON(videoDetails)に
+    // 実際の動画ID・タイトル・isLiveフラグが入っているので、それを読み取って判定する。
     const res = await fetchWithTimeout(
       liveUrl,
       {
@@ -154,20 +154,53 @@ async function checkYoutubeOne(t) {
       YOUTUBE_FETCH_TIMEOUT_MS
     );
 
-    const finalUrl = res.url || liveUrl;
-    const videoIdMatch = finalUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    const isLive = res.ok && /\/watch\?/.test(finalUrl) && !!videoIdMatch;
-
-    if (!isLive) {
-      console.log(`YouTube(${t.name}): isLive=false status=${res.status} finalUrl=${finalUrl}`);
+    if (!res.ok) {
+      console.warn(`YouTube取得失敗(${t.name}): HTTP ${res.status} url=${liveUrl}`);
       return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
     }
 
-    const url = `https://www.youtube.com/watch?v=${videoIdMatch[1]}`;
+    const html = await res.text();
 
-    // タイトル・サムネイルは公式のoEmbed(認証不要・埋め込みウィジェット用の軽量API)から取得する。
-    // 失敗しても配信中であること自体は分かっているので、その場合はタイトル・サムネイル無しで返す。
+    // videoDetails オブジェクトの中身だけを見て isLive / videoId / title を同時に判定する。
+    // ページ全体を正規表現で走査すると、配信中でなくても関連動画欄などに表示された
+    // 「別の配信者のライブ配信」を誤って拾ってしまうことがあるため、
+    // 必ず対象チャンネルの動画自体を表す videoDetails ブロックの範囲内だけを見る。
+    let isLive = false;
     let title = '';
+    let videoId = '';
+
+    const vdIdx = html.indexOf('"videoDetails":{');
+    if (vdIdx !== -1) {
+      const chunk = html.slice(vdIdx, vdIdx + 2000); // videoDetailsは通常この範囲に収まる
+      const videoIdMatch = chunk.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+      const titleMatch = chunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
+      const channelIdMatch = chunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
+      if (videoIdMatch) videoId = videoIdMatch[1];
+      if (titleMatch) {
+        try {
+          title = JSON.parse(`"${titleMatch[1]}"`);
+        } catch (e) { /* noop */ }
+      }
+      isLive = /"isLive":\s*true/.test(chunk);
+
+      // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する
+      if (isLive && channelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && channelIdMatch[1] !== t.channelId) {
+        console.warn(
+          `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${channelIdMatch[1]})`
+        );
+        isLive = false;
+      }
+    }
+
+    if (!isLive) {
+      console.log(`YouTube(${t.name}): isLive=false url=${liveUrl}`);
+      return { name: t.name, platform: 'youtube', isLive: false, title: '', url: '', thumbnail: '' };
+    }
+
+    const url = videoId ? `https://www.youtube.com/watch?v=${videoId}` : liveUrl;
+
+    // サムネイルは公式のoEmbed(認証不要・埋め込みウィジェット用の軽量API)から取得する。
+    // タイトルはvideoDetailsから取れなかった場合のみoEmbedの値で補う。
     let thumbnail = '';
     try {
       const oembedRes = await fetchWithTimeout(
@@ -177,7 +210,7 @@ async function checkYoutubeOne(t) {
       );
       if (oembedRes.ok) {
         const info = await oembedRes.json();
-        title = info.title || '';
+        if (!title) title = info.title || '';
         thumbnail = info.thumbnail_url || '';
       } else {
         console.warn(`YouTube(${t.name}): oEmbed取得失敗 HTTP ${oembedRes.status}`);
