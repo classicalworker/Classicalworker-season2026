@@ -165,7 +165,7 @@ async function checkYoutubeOne(t) {
     // 診断用: 実際に何が返ってきているかを必ずログに残す。
     // (応答が想定より小さい/リダイレクトされている等、取得自体の問題を切り分けるため)
     console.log(
-      `YouTube(${t.name}): 診断 status=${res.status} finalUrl=${res.url} htmlLength=${html.length} hasPlayerMicroformat=${pmIdx !== -1} hasConsentForm=${/consent\.youtube\.com|action="https:\/\/consent\.google\.com/.test(html)}`
+      `YouTube(${t.name}): 診断 status=${res.status} finalUrl=${res.url} htmlLength=${html.length} hasPlayerMicroformat=${pmIdx !== -1} hasVideoDetails=${html.includes('"videoDetails":{')} hasYtInitialPlayerResponse=${html.includes('ytInitialPlayerResponse')} hasYtInitialData=${html.includes('ytInitialData')} hasConsentForm=${/consent\.youtube\.com|action="https:\/\/consent\.google\.com/.test(html)}`
     );
 
     // 配信中かどうかを示す "isLiveNow" は videoDetails ではなく
@@ -208,6 +208,7 @@ async function checkYoutubeOne(t) {
         const vdTitleMatch = vdChunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
         const vdChannelIdMatch = vdChunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
         const vdIsLive = /"isLive":\s*true/.test(vdChunk);
+        console.log(`YouTube(${t.name}): videoDetails診断 found=true isLive=${vdIsLive} videoId=${vdVideoIdMatch ? vdVideoIdMatch[1] : '(なし)'}`);
         if (vdIsLive) {
           isLive = true;
           if (vdVideoIdMatch) videoId = vdVideoIdMatch[1];
@@ -223,7 +224,21 @@ async function checkYoutubeOne(t) {
             isLive = false;
           }
         }
+      } else {
+        console.log(`YouTube(${t.name}): videoDetails診断 found=false`);
       }
+    }
+
+    // さらなる保険として、ページ全体に「配信中」を示す代表的なマーカー文字列が
+    // どれか存在するかどうかも診断ログに出しておく(構造自体が想定と違う場合の手がかり)
+    if (!isLive) {
+      const markers = {
+        isLiveNow: /"isLiveNow":\s*true/.test(html),
+        styleLive: /"style":\s*"LIVE"/.test(html),
+        badgeLiveNow: /BADGE_STYLE_TYPE_LIVE_NOW/.test(html),
+        liveBroadcastDetails: html.includes('"liveBroadcastDetails"'),
+      };
+      console.log(`YouTube(${t.name}): 全体マーカー診断 ${JSON.stringify(markers)}`);
     }
 
     if (!isLive) {
