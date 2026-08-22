@@ -49,7 +49,8 @@ function topDetectPlatform(url){
 }
 
 // YouTubeの公開oEmbed API(キー不要・CORS対応)から動画/配信タイトルを取得
-// (手動でYouTube URLを入力したメンバー向けのフォールバック。自動検知分はGitHub Actions側で取得済み)
+// (手動でYouTube URLを入力したメンバー向け。閲覧者のブラウザから直接呼ぶため、
+//  GitHub Actions側の自動検知で問題になっていたボット判定の影響を受けない)
 async function topFetchYoutubeTitle(url){
   try{
     const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
@@ -62,8 +63,9 @@ async function topFetchYoutubeTitle(url){
 }
 
 // 配信中メンバーの一覧を取得する。
-// 優先順位: ① GitHub Actionsが自動検知した live_status(YouTubeチャンネルID/Twitchログイン名を登録している場合)
-//          ② メンバーが手動で入力した配信URL+「配信中」チェック(①の対象外プラットフォーム用のフォールバック)
+// 優先順位: ① GitHub Actionsが自動検知した live_status(Twitchログイン名を登録している場合のみ。
+//             YouTubeは仕様上の制約により自動検知非対応)
+//          ② メンバーが手動で入力した配信URL+「配信中」チェック(YouTubeを含む①の対象外プラットフォーム用)
 function topGetLiveEntries(){
   const names = Object.keys(data.players);
   const entries = [];

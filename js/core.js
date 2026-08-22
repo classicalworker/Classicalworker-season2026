@@ -58,7 +58,7 @@ function defaultData(){
     matches:[], goals:[], controlTypes:[], maxMR:'', mainGoal:'', mainGoalDone:false, mainGoalAchievedAt:null,
     userCode:'', devices:[], deviceName:'', platforms:[], icon:'', notifications:[],
     streamUrl:'', streamTitle:'', isLive:false,
-    youtubeChannelId:'', twitchLogin:''
+    twitchLogin:''
   });
   return {players, events:[], tournaments:[]};
 }
@@ -110,7 +110,6 @@ function normalizeData(data){
       if (p.streamUrl === undefined) p.streamUrl = '';
       if (p.streamTitle === undefined) p.streamTitle = '';
       if (p.isLive === undefined) p.isLive = false;
-      if (p.youtubeChannelId === undefined) p.youtubeChannelId = '';
       if (p.twitchLogin === undefined) p.twitchLogin = '';
       
       // matches内の各エントリも補正
