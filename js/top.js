@@ -517,7 +517,7 @@ function renderTop(){
 
       <div class="top-card top-card--goals">
         <div class="top-card-head">
-          <div class="top-card-title">🎯 目標<span class="top-card-title-note">(ランダムに表示中)</span></div>
+          <div class="top-card-title">📝 本日の課題<span class="top-card-title-note">(ランダムに表示中)</span></div>
           <a class="top-link-btn" href="goals.html">見る</a>
         </div>
         <div class="top-card-body">
