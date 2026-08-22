@@ -160,28 +160,34 @@ async function checkYoutubeOne(t) {
     }
 
     const html = await res.text();
+    const pmIdx = html.indexOf('"playerMicroformatRenderer":{');
 
-    // videoDetails オブジェクトの中身だけを見て isLive / videoId / title を同時に判定する。
-    // ページ全体を正規表現で走査すると、配信中でなくても関連動画欄などに表示された
-    // 「別の配信者のライブ配信」を誤って拾ってしまうことがあるため、
-    // 必ず対象チャンネルの動画自体を表す videoDetails ブロックの範囲内だけを見る。
+    // 診断用: 実際に何が返ってきているかを必ずログに残す。
+    // (応答が想定より小さい/リダイレクトされている等、取得自体の問題を切り分けるため)
+    console.log(
+      `YouTube(${t.name}): 診断 status=${res.status} finalUrl=${res.url} htmlLength=${html.length} hasPlayerMicroformat=${pmIdx !== -1} hasConsentForm=${/consent\.youtube\.com|action="https:\/\/consent\.google\.com/.test(html)}`
+    );
+
+    // 配信中かどうかを示す "isLiveNow" は videoDetails ではなく
+    // playerMicroformatRenderer.liveBroadcastDetails の中に入っている。
+    // 動画ID・チャンネルID・タイトルもこの同じオブジェクトから同時に取得することで、
+    // 「別の配信者の動画情報が混ざる」ことなく必ず対象と一致する組み合わせになる。
     let isLive = false;
     let title = '';
     let videoId = '';
 
-    const vdIdx = html.indexOf('"videoDetails":{');
-    if (vdIdx !== -1) {
-      const chunk = html.slice(vdIdx, vdIdx + 2000); // videoDetailsは通常この範囲に収まる
-      const videoIdMatch = chunk.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-      const titleMatch = chunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
-      const channelIdMatch = chunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
+    if (pmIdx !== -1) {
+      const chunk = html.slice(pmIdx, pmIdx + 4000); // 念のため広めに取る
+      const videoIdMatch = chunk.match(/"externalVideoId":"([a-zA-Z0-9_-]{11})"/);
+      const channelIdMatch = chunk.match(/"externalChannelId":"(UC[0-9A-Za-z_-]{20,})"/);
+      const titleMatch = chunk.match(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"\}/);
       if (videoIdMatch) videoId = videoIdMatch[1];
       if (titleMatch) {
         try {
           title = JSON.parse(`"${titleMatch[1]}"`);
         } catch (e) { /* noop */ }
       }
-      isLive = /"isLive":\s*true/.test(chunk);
+      isLive = /"isLiveNow":\s*true/.test(chunk);
 
       // 登録がUC形式のチャンネルIDの場合、取得した動画が本当にそのチャンネルのものかも照合する
       if (isLive && channelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && channelIdMatch[1] !== t.channelId) {
@@ -189,6 +195,34 @@ async function checkYoutubeOne(t) {
           `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化 (期待=${t.channelId} 実際=${channelIdMatch[1]})`
         );
         isLive = false;
+      }
+    }
+
+    // playerMicroformatRendererから判定できなかった場合の保険として、
+    // videoDetails(こちらも「同一オブジェクト内」から動画ID・タイトル・isLiveを同時取得)も試す。
+    if (!isLive) {
+      const vdIdx = html.indexOf('"videoDetails":{');
+      if (vdIdx !== -1) {
+        const vdChunk = html.slice(vdIdx, vdIdx + 2000);
+        const vdVideoIdMatch = vdChunk.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+        const vdTitleMatch = vdChunk.match(/"title":"((?:[^"\\]|\\.)*)"/);
+        const vdChannelIdMatch = vdChunk.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/);
+        const vdIsLive = /"isLive":\s*true/.test(vdChunk);
+        if (vdIsLive) {
+          isLive = true;
+          if (vdVideoIdMatch) videoId = vdVideoIdMatch[1];
+          if (vdTitleMatch) {
+            try {
+              title = JSON.parse(`"${vdTitleMatch[1]}"`);
+            } catch (e) { /* noop */ }
+          }
+          if (vdChannelIdMatch && /^UC[0-9A-Za-z_-]{20,}$/.test(t.channelId) && vdChannelIdMatch[1] !== t.channelId) {
+            console.warn(
+              `YouTube(${t.name}): 取得動画のチャンネルIDが不一致のため無効化(videoDetails) (期待=${t.channelId} 実際=${vdChannelIdMatch[1]})`
+            );
+            isLive = false;
+          }
+        }
       }
     }
 
